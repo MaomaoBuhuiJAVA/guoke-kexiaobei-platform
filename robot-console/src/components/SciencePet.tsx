@@ -47,6 +47,7 @@ import { clearChatHistory, readChatHistory, writeChatHistory, type StoredChatMes
 import { normalizeVoiceCallReply, voiceCallSpeechText } from "@/lib/voice-call";
 import { createVoiceSpeechQueue } from "@/lib/voice-speech";
 import { createVoiceTranscriptBuffer } from "@/lib/voice-transcript";
+import { compatibleSpeechRecognitionConstructor, markNativeSpeechUnavailable } from "@/lib/recorded-speech";
 import { playSpeechBatches, playSpeechClip } from "@/lib/speech-batches";
 import type { TeachingWorkflowState } from "@/lib/native-workflow/state";
 import type { ScienceLabLink } from "@/lib/science-lab-links";
@@ -171,6 +172,8 @@ type SpeechRecognitionEventLike = Event & {
 type SpeechRecognitionErrorEventLike = Event & { error: string };
 
 type SpeechRecognitionLike = {
+  transport?: "recording";
+  onlevel?: ((level: number) => void) | null;
   continuous: boolean;
   interimResults: boolean;
   lang: string;
@@ -350,12 +353,8 @@ function getPetBottomBounds() {
   return { minBottom, maxBottom };
 }
 
-function getSpeechRecognitionConstructor() {
-  const voiceWindow = window as typeof window & {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  };
-  return voiceWindow.SpeechRecognition ?? voiceWindow.webkitSpeechRecognition;
+function getSpeechRecognitionConstructor(mode: "hold" | "call" = "hold"): SpeechRecognitionConstructor | undefined {
+  return compatibleSpeechRecognitionConstructor(mode);
 }
 
 function toSpeechText(value: string) {
@@ -947,6 +946,21 @@ export function SciencePet() {
     [stopAllVoice],
   );
 
+  useEffect(() => {
+    const stopHiddenRecording = () => {
+      if (document.hidden && (recognitionRef.current || callActiveRef.current)) stopAllVoice();
+    };
+    const stopLeavingRecording = () => {
+      if (recognitionRef.current || callActiveRef.current) stopAllVoice();
+    };
+    document.addEventListener("visibilitychange", stopHiddenRecording);
+    window.addEventListener("pagehide", stopLeavingRecording);
+    return () => {
+      document.removeEventListener("visibilitychange", stopHiddenRecording);
+      window.removeEventListener("pagehide", stopLeavingRecording);
+    };
+  }, [stopAllVoice]);
+
   function isCurrentVoiceCall(sessionId: number) {
     const session = callSessionRef.current;
     return Boolean(
@@ -1406,7 +1420,7 @@ export function SciencePet() {
 
   function startCallRecognition(sessionId: number) {
     if (!isCurrentVoiceCallListening(sessionId) || callRecognitionRef.current) return;
-    const Recognition = getSpeechRecognitionConstructor();
+    const Recognition = getSpeechRecognitionConstructor("call");
     if (!Recognition) {
       setVoiceCallError(sessionId, "当前浏览器不支持语音通话，请使用文字对话。");
       return;
@@ -1434,6 +1448,17 @@ export function SciencePet() {
     };
     recognition.onerror = (event) => {
       if (callRecognitionRef.current !== recognition || !isCurrentVoiceCall(sessionId)) return;
+      if (event.error === "service-not-allowed" && recognition.transport !== "recording") {
+        markNativeSpeechUnavailable();
+        if (!getSpeechRecognitionConstructor("call")) {
+          setVoiceCallError(sessionId, "当前页面不允许录音，请在系统浏览器中打开后重试。");
+          return;
+        }
+        stopCallRecognition();
+        setCallNotice("正在切换兼容录音，请稍候再说一次。");
+        scheduleCallRecognitionRestart(sessionId, 200);
+        return;
+      }
       if (event.error === "no-speech") {
         transcriptBuffer.cancel();
         setCallNotice("我没听清，再说一次好吗？");
@@ -1446,8 +1471,8 @@ export function SciencePet() {
         return;
       }
       const errors: Record<string, string> = {
-        "not-allowed": "小麦克风还没打开，请老师或家长帮忙开启。",
-        "service-not-allowed": "浏览器已禁用语音识别服务，请使用文字对话。",
+        "not-allowed": "麦克风未获授权。微信内请允许录音，并在手机设置中开启微信的麦克风权限。",
+        "service-not-allowed": "当前页面不允许录音，请在系统浏览器中打开后重试。",
         "audio-capture": "我没有找到麦克风，请老师或家长帮忙看看。",
         network: "网络有点慢，我再试一次。",
       };
@@ -1499,7 +1524,7 @@ export function SciencePet() {
 
   function startVoiceCall() {
     if (callActiveRef.current) return;
-    if (!getSpeechRecognitionConstructor()) {
+    if (!getSpeechRecognitionConstructor("call")) {
       setCallPhase("error");
       setCallNotice("当前浏览器不支持语音通话，请使用文字对话。");
       return;
@@ -1926,7 +1951,7 @@ export function SciencePet() {
   }
 
   function startVoiceInput(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (busy || callPhase !== "idle" || callActiveRef.current || voiceStatus === "starting" || voiceStatus === "listening") return;
+    if (busy || callPhase !== "idle" || callActiveRef.current || voiceStatus === "starting" || voiceStatus === "listening" || voiceStatus === "processing") return;
     if (voiceRestartTimerRef.current !== null) {
       window.clearTimeout(voiceRestartTimerRef.current);
       voiceRestartTimerRef.current = null;
@@ -1953,7 +1978,16 @@ export function SciencePet() {
     voiceBaseInputRef.current = input;
     voiceTranscriptRef.current = "";
     recognitionRef.current = recognition;
-    startVoiceWaveMeter();
+    if (recognition.transport === "recording") {
+      recognition.onlevel = (level) => {
+        voiceWaveBarsRef.current.forEach((bar, index) => {
+          const weights = [0.8, 1.08, 1.35, 1.02, 0.78];
+          bar?.style.setProperty("--pet-voice-level", Math.min(1.34, 0.38 + level * weights[index]).toFixed(3));
+        });
+      };
+    } else {
+      startVoiceWaveMeter();
+    }
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "zh-CN";
@@ -1987,12 +2021,13 @@ export function SciencePet() {
       setVoiceReleaseAction("send");
       failed = true;
       const errorMessages: Record<string, string> = {
-        "not-allowed": "麦克风权限未开启，请在浏览器设置中允许访问。",
-        "service-not-allowed": "浏览器已禁用语音识别服务。",
+        "not-allowed": "麦克风未获授权。微信内请允许录音，并在手机设置中开启微信的麦克风权限。",
+        "service-not-allowed": "内置语音识别不可用，已切换兼容录音，请松手后重新按住说话。",
         "audio-capture": "没有检测到可用的麦克风。",
         "no-speech": "录音太短或没有听到声音，请按住后再说一次。",
         network: "语音服务暂时无法连接，请稍后重试。",
       };
+      if (errorEvent.error === "service-not-allowed") markNativeSpeechUnavailable();
       setVoiceStatus("error");
       setVoiceNotice(errorMessages[errorEvent.error] ?? "语音识别失败，请重新尝试。");
     };
@@ -2013,7 +2048,7 @@ export function SciencePet() {
         voicePressedRef.current = false;
         return;
       }
-      if (shouldRestartPressAndHoldRecognition({held, released, cancelled, failed})) {
+      if (recognition.transport !== "recording" && shouldRestartPressAndHoldRecognition({held, released, cancelled, failed})) {
         voicePressedRef.current = true;
         setVoiceStatus("listening");
         setVoiceNotice("正在聆听，松开后完成输入");
