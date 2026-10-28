@@ -1,0 +1,67 @@
+name: Linux production build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-production-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: robot-console
+    env:
+      # Build-time pages must not connect to production. Runtime secrets stay on ECS.
+      DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
+      NODE_ENV: production
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: robot-console/package-lock.json
+
+      - name: Install Linux dependencies
+        run: npm ci --ignore-scripts=false
+
+      - name: Run tests
+        run: npm test -- --run
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Assemble lightweight deployment package
+        run: |
+          rm -rf ../deploy-package
+          mkdir -p ../deploy-package/.next
+          cp -a .next/standalone/. ../deploy-package/
+          cp -a .next/static ../deploy-package/.next/
+          cp -a public ../deploy-package/
+          cp package.json package-lock.json ../deploy-package/
+          printf '%s\n' '${{ github.sha }}' > ../deploy-package/BUILD_COMMIT
+          printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ../deploy-package/BUILD_TIME
+          tar -czf ../kexiaobei-linux-${{ github.sha }}.tar.gz -C ../deploy-package .
+
+      - name: Upload lightweight deployment package
+        uses: actions/upload-artifact@v4
+        with:
+          name: kexiaobei-linux-${{ github.sha }}
+          path: kexiaobei-linux-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+          retention-days: 30
