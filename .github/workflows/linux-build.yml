@@ -22,6 +22,7 @@ jobs:
     env:
       # Build-time pages must not connect to production. Runtime secrets stay on ECS.
       DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
+      AUTH_SECRET: ci-only-auth-secret-012345678901234567890123456789
       NODE_ENV: production
     steps:
       - name: Check out source
