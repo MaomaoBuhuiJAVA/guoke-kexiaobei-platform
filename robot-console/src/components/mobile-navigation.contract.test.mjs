@@ -33,6 +33,12 @@ test("lab accepts a type query and uses the three modules as mobile navigation",
   assert.match(lab, /compact-filter-row--type/);
 });
 
+test("lab exposes 科学乐园 in the mobile navigation", () => {
+  assert.match(lab, /import \{[\s\S]*?\bGamepad2\b[\s\S]*?\} from "lucide-react"/);
+  assert.match(lab, /const labMobileNavItems[\s\S]*?key: "games"[\s\S]*?label: "科学乐园"[\s\S]*?href: "\/games"/);
+  assert.match(styles, /\.lab-page \.home-bottom-nav\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4/);
+});
+
 test("mobile navigation supports an optional icon without changing existing links", () => {
   assert.match(nav, /icon\?:/);
   assert.match(nav, /item\.icon/);

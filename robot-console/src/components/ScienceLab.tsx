@@ -13,6 +13,7 @@ import {
   ExternalLink,
   FileText,
   FlaskConical,
+  Gamepad2,
   House,
   Image as ImageIcon,
   LoaderCircle,
@@ -71,6 +72,7 @@ const labMobileNavItems: MobileAppNavItem[] = [
   { key: "科学诗", label: "科学诗", href: "#lab-results", icon: BookOpen },
   { key: "科学故事", label: "科学故事", href: "#lab-results", icon: Clapperboard },
   { key: "科学实验", label: "科学实验", href: "#lab-results", icon: FlaskConical },
+  { key: "games", label: "科学乐园", href: "/games", icon: Gamepad2 },
 ];
 
 const labHeroPhotos = [

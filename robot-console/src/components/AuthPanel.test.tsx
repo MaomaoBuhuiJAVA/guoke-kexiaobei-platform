@@ -49,6 +49,12 @@ describe("account service availability", () => {
     expect(html).not.toContain("注册时需要验证手机号码。");
     expect(html).not.toContain("家长注册后可浏览公开资源、体验 AI。本园家长投稿需联系园方核验身份。");
   });
+  it("offers password and phone-code registration methods", () => {
+    const html = render({initialMode: "register", smsAvailable: true});
+    expect(html).toContain('aria-label="注册方式"');
+    expect(html).toContain("账号密码注册");
+    expect(html).toContain("手机号快捷注册");
+  });
   it("retains SMS codes for login and reset and bound-phone management", () => {
     expect(render({initialMode: "smsLogin", smsAvailable: true})).toContain("one-time-code");
     expect(render({initialMode: "reset", smsAvailable: true})).toContain("one-time-code");

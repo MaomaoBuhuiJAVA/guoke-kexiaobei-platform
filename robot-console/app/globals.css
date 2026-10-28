@@ -5226,6 +5226,10 @@ img {
   flex: none;
 }
 
+.lab-page .home-bottom-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .home-page__bottom-anchor {
   height: 1px;
   scroll-margin-top: 24px;

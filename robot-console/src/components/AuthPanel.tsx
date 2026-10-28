@@ -15,6 +15,7 @@ import type {SmsPurpose} from "@/lib/sms/config";
 import styles from "./AuthPanel.module.css";
 
 type Mode = "login" | "register" | "account" | "password" | "smsLogin" | "reset" | "phone" | "username";
+type RegistrationMethod = "password" | "sms";
 type Feedback = { kind: "success" | "error"; text: string } | null;
 
 const copy = {
@@ -32,6 +33,7 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
   const router = useRouter();
   const [user, setUser] = useState(initialUser);
   const [mode, setMode] = useState<Mode>(initialUser ? initialMode === "password" || initialMode === "phone" || initialMode === "username" ? initialMode : "account" : initialMode === "password" || initialMode === "phone" || initialMode === "username" ? "login" : initialMode);
+  const [registrationMethod, setRegistrationMethod] = useState<RegistrationMethod>("password");
   const [form, setForm] = useState({ name: "", username: initialUser?.username || "", identifier: "", phone: "", accountType: "PARENT", teacherCode: "", password: "", confirmPassword: "", oldPassword: "", newPassword: "" });
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
@@ -41,10 +43,12 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
   const [passwordFocused, setPasswordFocused] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const isRegister = mode === "register";
+  const isSmsRegister = isRegister && registrationMethod === "sms";
   const isPassword = mode === "password";
   const isUsername = mode === "username";
   const isSmsLogin = mode === "smsLogin"; const isReset = mode === "reset"; const isPhone = mode === "phone";
   const isLoginMode = mode === "login" || isSmsLogin;
+  const needsSmsProof = isSmsRegister || isSmsLogin || isReset || isPhone;
   const requiresPolicyConsent = !user && (isLoginMode || isRegister);
   const purpose: SmsPurpose = isSmsLogin ? "login" : isReset ? "reset_password" : isPhone ? "phone_new" : "register";
 
@@ -57,12 +61,22 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
   function changeMode(next: Mode) {
     if (busy || mode === next) return;
     setMode(next);
+    if (next === "register") setRegistrationMethod("password");
     setFeedback(null);
     setSmsValues({});
     if (next === "phone") setForm(current => ({...current, phone: ""}));
     if (next === "username") setForm(current => ({...current, username: user?.username || ""}));
     if (next === "reset" && user?.phone) setForm(current => ({...current, phone: user.phone || ""}));
     clearPasswords();
+  }
+
+  function changeRegistrationMethod(next: RegistrationMethod) {
+    if (busy || !isRegister || next === registrationMethod || next === "sms" && !smsAvailable) return;
+    setRegistrationMethod(next);
+    setFeedback(null);
+    setForm(current => ({...current, password: "", confirmPassword: ""}));
+    setShowPassword(false);
+    setPasswordFocused(false);
   }
 
   function update(field: keyof typeof form, value: string) {
@@ -84,7 +98,7 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
       (formRef.current?.elements.namedItem("name") as HTMLInputElement | null)?.focus();
       return;
     }
-    if ((isRegister && form.password !== form.confirmPassword) || (isReset && form.newPassword !== form.confirmPassword)) {
+    if ((isRegister && !isSmsRegister && form.password !== form.confirmPassword) || (isReset && form.newPassword !== form.confirmPassword)) {
       setFeedback({ kind: "error", text: "两次密码不一致，再检查一下吧。" });
       (formRef.current?.elements.namedItem("confirmPassword") as HTMLInputElement | null)?.focus();
       return;
@@ -93,21 +107,23 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
       setFeedback({ kind: "error", text: "新密码需要与原密码不同。" });
       return;
     }
-    if ((isSmsLogin || isReset || isPhone) && !smsAvailable) {setFeedback({kind: "error", text: "短信服务暂不可用，请稍后重试或使用密码登录。"}); return;}
+    if (needsSmsProof && !smsAvailable) {setFeedback({kind: "error", text: "短信服务暂不可用，请稍后重试或使用密码登录。"}); return;}
     const proof = smsValues[purpose];
-    if (smsAvailable && (isSmsLogin || isReset || isPhone) && (!proof?.challengeId || !/^\d{6}$/u.test(proof.code))) {
+    if (smsAvailable && needsSmsProof && (!proof?.challengeId || !/^\d{6}$/u.test(proof.code))) {
       setFeedback({kind: "error", text: "请获取并填写短信验证码。"}); return;
     }
     if (isPhone && user?.phone && (!smsValues.phone_current?.challengeId || !/^\d{6}$/u.test(smsValues.phone_current.code))) {
       setFeedback({kind: "error", text: "请验证当前绑定的手机号码。"}); return;
     }
-    const endpoint = isUsername ? "/api/auth/username" : isReset ? "/api/auth/password/reset" : isPhone ? "/api/auth/phone" : isSmsLogin ? "/api/auth/sms/login" : isPassword ? "/api/auth/password" : isRegister ? "/api/auth/register" : "/api/auth/login";
+    const endpoint = isRegister
+      ? isSmsRegister ? "/api/auth/register/quick" : "/api/auth/register"
+      : isUsername ? "/api/auth/username" : isReset ? "/api/auth/password/reset" : isPhone ? "/api/auth/phone" : isSmsLogin ? "/api/auth/sms/login" : isPassword ? "/api/auth/password" : "/api/auth/login";
     const payload = isUsername ? {username: form.username.trim(), password: form.password} : isReset ? {phone: form.phone.trim(), newPassword: form.newPassword, ...proof}
       : isPhone ? {phone: form.phone.trim(), ...proof, currentChallengeId: smsValues.phone_current?.challengeId, currentCode: smsValues.phone_current?.code, oldPassword: form.oldPassword}
       : isSmsLogin ? {phone: form.phone.trim(), acceptedPolicies, ...proof} : isPassword
       ? { oldPassword: form.oldPassword, newPassword: form.newPassword }
       : isRegister
-        ? { name: form.name.trim(), username: form.username.trim(), phone: form.phone.trim(), accountType: form.accountType, ...(form.accountType === "TEACHER" ? { teacherCode: form.teacherCode } : {}), password: form.password, acceptedPolicies }
+        ? { name: form.name.trim(), username: form.username.trim(), phone: form.phone.trim(), accountType: form.accountType, ...(form.accountType === "TEACHER" ? { teacherCode: form.teacherCode } : {}), ...(isSmsRegister ? proof : {password: form.password}), acceptedPolicies }
         : { identifier: form.identifier.trim(), password: form.password, acceptedPolicies };
 
     setBusy(true);
@@ -126,10 +142,12 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
         setFeedback({kind: "success", text: "密码已重置，请使用新密码登录。"}); router.refresh();
       } else if (data?.requiresLogin && ((isRegister && data.registered) || ((isPhone || isPassword || isUsername) && data.ok))) {
         if (isPhone) setForm(current => ({...current, phone: form.phone.trim()}));
+        if (isRegister && !isSmsRegister) setForm(current => ({...current, identifier: form.username.trim() || form.phone.trim()}));
+        if (isSmsRegister) setForm(current => ({...current, phone: form.phone.trim()}));
         setUser(null); setSmsValues({});
         clearPasswords();
-        setMode("login");
-        setFeedback({ kind: "success", text: isRegister ? "账号已经创建，请使用刚才的手机号或用户名和密码登录。" : isUsername ? "用户名已设置，请重新登录。" : isPhone ? "手机号已更新，请使用新手机号重新登录。" : "密码已更新，请使用新密码重新登录。" });
+        setMode(isSmsRegister ? "smsLogin" : "login");
+        setFeedback({ kind: "success", text: isSmsRegister ? "账号已经创建，请使用手机号验证码登录。" : isRegister ? "账号已经创建，请使用刚才的手机号或用户名和密码登录。" : isUsername ? "用户名已设置，请重新登录。" : isPhone ? "手机号已更新，请使用新手机号重新登录。" : "密码已更新，请使用新密码重新登录。" });
         router.refresh();
       } else if (isPassword && data?.ok) {
         clearPasswords();
@@ -239,7 +257,24 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
               ))}
             </div>
           )}
-          <div className={styles.panel} data-mode={mode} id="auth-form-panel" role={!user && isLoginMode ? "tabpanel" : undefined} aria-labelledby={!user && isLoginMode ? `auth-tab-${mode}` : undefined}>
+          {isRegister && (
+            <div className={styles.tabs} data-mode={registrationMethod === "sms" ? "smsLogin" : "login"} role="tablist" aria-label="注册方式">
+              <span className={styles.tabIndicator} aria-hidden="true" />
+              {(["password", "sms"] as const).map((method) => (
+                <button key={method} id={`register-tab-${method}`} role="tab" type="button"
+                  disabled={busy || method === "sms" && !smsAvailable}
+                  aria-selected={method === registrationMethod} aria-controls="auth-form-panel"
+                  tabIndex={method === registrationMethod ? 0 : -1}
+                  className={method === registrationMethod ? styles.activeTab : ""}
+                  onClick={() => changeRegistrationMethod(method)}>
+                  {method === "password" ? "账号密码注册" : "手机号快捷注册"}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className={styles.panel} data-mode={mode} id="auth-form-panel"
+            role={!user && (isLoginMode || isRegister) ? "tabpanel" : undefined}
+            aria-labelledby={!user && isRegister ? `register-tab-${registrationMethod}` : !user && isLoginMode ? `auth-tab-${mode}` : undefined}>
             {!isSmsLogin && <div className={styles.cardHeading}>
               {user && <span className={styles.accountIcon}><CheckCircle2 size={29} aria-hidden="true" /></span>}
               <h2>{copy[mode].title}<span className={styles.headingDot} aria-hidden="true" /></h2><p>{copy[mode].description}</p>
@@ -293,11 +328,11 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
                     {isRegister && <><Field icon={UserRound} label="用户名（选填）" name="username" placeholder="可设置中文、字母、数字或下划线" autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={2} maxLength={24} value={form.username} onChange={event => update("username", event.target.value)} /></>}
                     <Field icon={Phone} label="手机号码" name="phone" placeholder="请输入 11 位手机号码" type="tel" inputMode="tel" autoComplete="tel" pattern="1[3-9][0-9]{9}" maxLength={11} required value={form.phone} onChange={(event) => update("phone", event.target.value)} />
                     </>}
-                    {(isSmsLogin || isReset) && <SmsCodeField key={`${mode}:${form.phone}`} phone={form.phone.trim()} purpose={purpose} available={smsAvailable} busy={busy} value={smsValues[purpose]} onChange={value => setSmsValues(current => ({...current, [purpose]: value}))} onError={text => setFeedback({kind: "error", text})} />}
-                    {!isSmsLogin && !isReset && <Field icon={LockKeyhole} label="密码" name="password" placeholder={isRegister ? "设置密码，至少 8 位" : "请输入密码"} type={showPassword ? "text" : "password"} autoComplete={isRegister ? "new-password" : "current-password"} minLength={isRegister ? 8 : undefined} maxLength={isRegister ? 72 : 128} required value={form.password} onChange={(event) => update("password", event.target.value)} action={passwordAction} />}
+                    {(isSmsRegister || isSmsLogin || isReset) && <SmsCodeField key={`${mode}:${form.phone}`} phone={form.phone.trim()} purpose={purpose} available={smsAvailable} busy={busy} value={smsValues[purpose]} onChange={value => setSmsValues(current => ({...current, [purpose]: value}))} onError={text => setFeedback({kind: "error", text})} />}
+                    {!isSmsLogin && !isReset && !isSmsRegister && <Field icon={LockKeyhole} label="密码" name="password" placeholder={isRegister ? "设置密码，至少 8 位" : "请输入密码"} type={showPassword ? "text" : "password"} autoComplete={isRegister ? "new-password" : "current-password"} minLength={isRegister ? 8 : undefined} maxLength={isRegister ? 72 : 128} required value={form.password} onChange={(event) => update("password", event.target.value)} action={passwordAction} />}
                     {isReset && <><Field icon={LockKeyhole} label="新密码" name="newPassword" placeholder="设置新密码，至少 8 位" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={72} required value={form.newPassword} onChange={event => update("newPassword", event.target.value)} action={passwordAction} />
                       <Field icon={LockKeyhole} label="确认新密码" name="confirmPassword" placeholder="再输入一次新密码" type={showPassword ? "text" : "password"} autoComplete="new-password" maxLength={72} required value={form.confirmPassword} onChange={event => update("confirmPassword", event.target.value)} /></>}
-                    {!isReset && <div className={styles.modeField} data-expanded={isRegister} aria-hidden={!isRegister} inert={!isRegister}><div className={styles.modeFieldInner}><Field icon={LockKeyhole} label="确认密码" name="confirmPassword" placeholder="再输入一次密码" type={showPassword ? "text" : "password"} autoComplete="new-password" maxLength={72} disabled={!isRegister} required={isRegister} value={form.confirmPassword} onChange={(event) => update("confirmPassword", event.target.value)} /></div></div>}
+                    {!isReset && !isSmsRegister && <div className={styles.modeField} data-expanded={isRegister} aria-hidden={!isRegister} inert={!isRegister}><div className={styles.modeFieldInner}><Field icon={LockKeyhole} label="确认密码" name="confirmPassword" placeholder="再输入一次密码" type={showPassword ? "text" : "password"} autoComplete="new-password" maxLength={72} disabled={!isRegister} required={isRegister} value={form.confirmPassword} onChange={(event) => update("confirmPassword", event.target.value)} /></div></div>}
                   </> : isPhone ? <>
                     {user?.phone ? <><Field icon={Phone} label="当前绑定手机" name="currentPhone" type="tel" value={user.phone} readOnly />
                       <SmsCodeField key={`current:${user.phone}`} phone={user.phone} purpose="phone_current" label="当前手机验证码" available={smsAvailable} busy={busy} value={smsValues.phone_current} onChange={value => setSmsValues(current => ({...current, phone_current: value}))} onError={text => setFeedback({kind: "error", text})} /></>
@@ -315,8 +350,8 @@ export function AuthPanel({ initialUser, initialMode = "login", returnTo, smsAva
                     <span className={styles.policyCheckbox} aria-hidden="true">{acceptedPolicies ? "✓" : ""}</span>
                     <span className={styles.policyCopy}>我已阅读并同意 <Link href="/user-agreement" target="_blank" rel="noreferrer">《用户协议》</Link> 和 <Link href="/privacy-policy" target="_blank" rel="noreferrer">《隐私政策》</Link>，并同意平台为提供登录、注册及相关服务处理必要的个人信息。</span>
                   </label>}
-                  <button className={styles.submit} type="submit" aria-busy={busy} disabled={busy || (requiresPolicyConsent && !acceptedPolicies) || ((isSmsLogin || isReset || isPhone) && !smsAvailable)}>
-                    {busy ? <><LoaderCircle className={styles.spinner} size={19} aria-hidden="true" />正在处理…</> : <>{copy[mode].action}<ArrowRight size={18} aria-hidden="true" /></>}
+                  <button className={styles.submit} type="submit" aria-busy={busy} disabled={busy || (requiresPolicyConsent && !acceptedPolicies) || (needsSmsProof && !smsAvailable)}>
+                    {busy ? <><LoaderCircle className={styles.spinner} size={19} aria-hidden="true" />正在处理…</> : <>{isSmsRegister ? "验证并注册" : copy[mode].action}<ArrowRight size={18} aria-hidden="true" /></>}
                   </button>
                 </fieldset>
                 {(isPassword || isPhone || isReset || isRegister || isUsername) && <button className={styles.textButton} type="button" disabled={busy} onClick={() => changeMode(user ? "account" : "login")}><ArrowLeft size={16} aria-hidden="true" />{user ? "返回账号中心" : "返回登录"}</button>}
