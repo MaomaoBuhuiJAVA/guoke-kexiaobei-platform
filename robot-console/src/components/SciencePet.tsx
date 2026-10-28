@@ -1785,6 +1785,9 @@ export function SciencePet() {
     const content = prompt.trim();
     if (!content || busy || callActiveRef.current) return;
 
+    // Clear voice notice when message is being sent
+    setVoiceNotice("");
+
     const coverTarget = pendingPoetryCoverTargetRef.current;
     const targetResourceId = coverTarget?.prompt === content ? coverTarget.resourceId : undefined;
     pendingPoetryCoverTargetRef.current = null;
