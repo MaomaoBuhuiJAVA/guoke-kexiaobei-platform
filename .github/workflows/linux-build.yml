@@ -54,7 +54,10 @@ jobs:
           cp -a .next/standalone/. ../deploy-package/.next/standalone/
           cp -a .next/static ../deploy-package/.next/
           cp -a public ../deploy-package/
+          cp -a .next/static ../deploy-package/.next/standalone/.next/
+          cp -a public ../deploy-package/.next/standalone/
           mkdir -p ../deploy-package/.next/standalone/.next/cache
+          node scripts/verify-standalone-package.mjs ../deploy-package
           cp package.json package-lock.json ../deploy-package/
           printf '%s\n' '${{ github.sha }}' > ../deploy-package/BUILD_COMMIT
           printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ../deploy-package/BUILD_TIME
