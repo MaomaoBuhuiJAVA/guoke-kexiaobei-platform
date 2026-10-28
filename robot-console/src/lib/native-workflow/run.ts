@@ -163,7 +163,7 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
       else if (safeFireDraft) result.reply = safeFireDraft;
       else result.reply=await completeModel({signal,maxTokens:1200,messages:[
         {role:"system",content:resourceReasoningPrompt},
-        {role:"user",content:`用户问题：${message}\n检索状态：本园资料库没有精确匹配到可直接引用的条目。请回答问题本身；如需设计活动，提供标注为原创的安全方案，不要伪称园本资料。`},
+        {role:"user",content:`用户问题：${message}\n\n园本资料库未检索到直接对应的条目。请运用科学知识直接回答教师的问题；如果问题涉及科学实验或活动设计，提供适合幼儿的探究方案（明确标注为"原创建议"）；不要把"资料库未命中"当作答复内容。`},
       ],onDelta:onEvent ? emitText : undefined});
       result.workflowState.draft = result.reply;
       return result;
