@@ -11,7 +11,6 @@ import styles from "./ScienceGames.module.css";
 
 const navigation = [
   { href: "/games", label: "科学乐园", icon: Compass },
-  { href: "/games/leaderboard", label: "探索榜", icon: Trophy },
   { href: "/games/growth", label: "我的成长", icon: Sprout },
 ];
 
@@ -24,7 +23,7 @@ function Content({ children }: { children: ReactNode }) {
       <div className={styles.headerInner}>
         <Link href={playing ? "/games" : "/"} className={styles.backLink} aria-label={playing ? "返回科学乐园" : "返回科小贝首页"}><ArrowLeft size={19} /><span>{playing ? "返回乐园" : "科小贝首页"}</span></Link>
         {playing && ready ? <Link href="/games/growth" className={styles.playingProfile} aria-label={`当前孩子：${profile.name}，切换孩子档案`}><ExplorerAvatar kind={profile.avatar} /><span><strong>{profile.name}</strong><small>{recordSource === "account" ? "账号手册 · 科学实验台" : "本机手册 · 科学实验台"}</small></span></Link> : <Link href="/games" className={styles.brand}><span className={styles.brandMark}><Atom size={23} strokeWidth={1.6} /></span><span>科小贝<span className={styles.brandSuffix}> · 科学乐园</span></span></Link>}
-        <Link href="/games/leaderboard" className={styles.artLink} aria-label="积分榜"><Trophy size={17} strokeWidth={1.6} /><span>积分榜</span></Link>
+        <Link href="/games/leaderboard" className={styles.artLink} aria-label="排行榜"><Trophy size={17} strokeWidth={1.6} aria-hidden="true" /><span>排行榜</span></Link>
       </div>
     </header>
     <main className={`${styles.main} ${playing ? styles.playMain : ""}`}>

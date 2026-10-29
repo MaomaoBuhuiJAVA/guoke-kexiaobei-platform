@@ -44,7 +44,7 @@ export function MagnetGame() {
       </div>
       <aside className={styles.aside}>
         {pending && <p role="status">打捞完成，正在保存记录…</p>}
-        {reward ? <div className={styles.reward}><span className={styles.rewardPoints}>{reward.pending ? "待同步" : reward.confirmed ? "已同步" : <>+{reward.points}<small> 积分</small></>}</span><h2>全部打捞成功</h2><p>{reward.reason}</p><div className={styles.rewardActions}><button type="button" onClick={reset}><RotateCcw size={15} /> 再玩一次</button><Link href="/games">玩别的实验 <ArrowRight size={15} /></Link></div><Link className={styles.rankingLink} href="/games/leaderboard">去看看积分榜 <ArrowRight size={15} /></Link></div> : !pending && <div className={styles.instructions}><h2>怎么玩</h2><p><b>01</b> 抓住磁铁，靠近铁制小零件。</p><p><b>02</b> 吸住后，拖到左上方收集盘。</p><p><b>03</b> 松手，把零件留在盘子里。</p></div>}
+        {reward ? <div className={styles.reward}><span className={styles.rewardPoints}>{reward.pending ? "待同步" : reward.confirmed ? "已同步" : <>+{reward.points}<small> 积分</small></>}</span><h2>全部打捞成功</h2><p>{reward.reason}</p><div className={styles.rewardActions}><button type="button" onClick={reset}><RotateCcw size={15} /> 再玩一次</button><Link href="/games">玩别的实验 <ArrowRight size={15} /></Link></div></div> : !pending && <div className={styles.instructions}><h2>怎么玩</h2><p><b>01</b> 抓住磁铁，靠近铁制小零件。</p><p><b>02</b> 吸住后，拖到左上方收集盘。</p><p><b>03</b> 松手，把零件留在盘子里。</p></div>}
         <div className={styles.discovery}><span>试着找一找</span><p>木块、塑料积木、铝罐，为什么没有被吸起来？</p></div>
         <details className={styles.keyboard}><summary>键盘操作</summary><p id="magnet-controls">聚焦实验台后，用方向键移动磁铁，空格或回车键放下零件。</p></details>
       </aside>

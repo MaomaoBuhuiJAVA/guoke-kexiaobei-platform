@@ -44,7 +44,7 @@ export function ExplorerGrowth() {
     </fieldset></form>}
 
     <section className={styles.profileCard} aria-label="当前孩子档案"><ExplorerAvatar kind={profile.avatar} className={styles.profileAvatar} /><div className={styles.profileIdentity}><span>{profile.age} · 科学游戏档案</span><h2>{profile.name}</h2></div><button className={styles.editButton} onClick={() => edit("edit")} disabled={locked} aria-label="编辑当前孩子档案"><Pencil size={16} /><span>编辑档案</span></button></section>
-    <section className={styles.growthStats} aria-label="游戏积分统计"><div><strong>{stats.weekPoints}<small> 分</small></strong><span>本周积分</span></div><div><strong>{stats.totalPoints}<small> 分</small></strong><span>累计积分</span></div><div><strong>{stats.topics}<small> 个</small></strong><span>玩过的主题</span></div><Link href="/games/leaderboard">查看周榜 <ArrowRight size={15} /></Link></section>
+    <section className={styles.growthStats} aria-label="游戏积分统计"><div><strong>{stats.weekPoints}<small> 分</small></strong><span>本周积分</span></div><div><strong>{stats.totalPoints}<small> 分</small></strong><span>累计积分</span></div><div><strong>{stats.topics}<small> 个</small></strong><span>玩过的主题</span></div></section>
 
     <div className={styles.sectionHeading}><h2>主题徽章</h2><span>完成一次游戏，即可收集</span></div>
     <section className={styles.badgeGrid} aria-label="已开放游戏的主题徽章">{availableGames.map(game => {

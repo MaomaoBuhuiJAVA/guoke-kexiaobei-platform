@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, MoveUpRight, Trophy } from "lucide-react";
+import { ArrowRight, Check, MoveUpRight } from "lucide-react";
 import { explorerStats } from "@/lib/science-games/progress";
 import { useGameProgress } from "./GameProvider";
 import { ExplorerAvatar } from "./ExplorerAvatar";
@@ -18,7 +18,6 @@ export function GamesHome() {
   return <div className={styles.home}>
     <section className={styles.introduction} aria-labelledby="games-heading">
       <div>
-        <p className={styles.smallTitle}><span /> 科小贝的动手科学馆</p>
         <h1 id="games-heading">今天，玩点科学<span>。</span></h1>
       </div>
       <p className={styles.introNote}>磁力、沉浮，还有光和影。<br />选一个实验，直接动手玩。</p>
@@ -70,7 +69,6 @@ export function GamesHome() {
       <div className={styles.topicScore}><strong>{stats.topics}<small> 个</small></strong><span>玩过的主题</span></div>
       <div className={styles.recordLinks}>
         <Link href="/games/growth">成长记录 <ArrowRight size={15} /></Link>
-        <Link href="/games/leaderboard"><Trophy size={15} /> 探索排行榜 <ArrowRight size={15} /></Link>
       </div>
     </section>
 
