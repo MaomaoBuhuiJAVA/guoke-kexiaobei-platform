@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#f4f7f3">
+  <link rel="icon" href="data:,">
+  <title>网站正在维护更新中 · 科小贝</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f4f7f3; color: #203b32; font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    .page { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; padding: 28px 24px 24px; }
+    header { width: min(100%, 1120px); margin: 0 auto; display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; letter-spacing: 1px; }
+    .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: #fff; background: #266d54; }
+    main { flex: 1; display: grid; place-items: center; padding: 52px 0 60px; }
+    .content { width: min(100%, 600px); text-align: center; }
+    .illustration { position: relative; width: 168px; height: 168px; display: grid; place-items: center; margin: 0 auto 28px; border-radius: 50%; background: #e5eee4; }
+    .illustration::before { content: ""; position: absolute; inset: 14px; border: 1px dashed #a5c1a9; border-radius: 50%; }
+    .window { position: relative; width: 98px; height: 80px; padding: 12px; border: 1.5px solid #8fac92; border-radius: 13px; background: #fdfefb; box-shadow: 0 8px 0 #c9ddcc70; transform: rotate(-5deg); }
+    .window-bar { display: flex; gap: 4px; border-bottom: 1px solid #e1e9df; padding-bottom: 9px; }
+    .window-bar i { width: 4px; height: 4px; background: #9db8a0; border-radius: 50%; }
+    .window svg { margin: 8px auto 0; display: block; color: #397d5e; }
+    .status-dot { position: absolute; right: 16px; bottom: 22px; width: 30px; height: 30px; background: #e9d9a3; border: 5px solid #f4f7f3; border-radius: 50%; }
+    .label { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; color: #537a61; font-size: 13px; }
+    .label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #6b956d; }
+    h1 { margin: 0; font-size: clamp(25px, 5.2vw, 34px); line-height: 1.5; letter-spacing: .5px; font-weight: 700; }
+    .description { margin: 14px 0 0; color: #718179; font-size: 15px; line-height: 1.9; }
+    button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; margin-top: 30px; padding: 13px 23px; min-height: 48px; border: none; border-radius: 9px; color: #fff; background: #266d54; font: inherit; font-size: 14px; cursor: pointer; transition: background .15s; }
+    button:hover { background: #1b5943; }
+    button:focus-visible { outline: 3px solid #a3bd84; outline-offset: 4px; }
+    .hint { margin-top: 16px; color: #8a978d; font-size: 12px; line-height: 1.8; }
+    footer { text-align: center; font-size: 12px; line-height: 1.8; color: #8b978e; }
+    @media (max-width: 480px) { .page { padding: 22px 20px; } header { font-size: 17px; } main { padding: 46px 0; } .illustration { transform: scale(.9); margin-bottom: 20px; } .description { font-size: 14px; } }
+    @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <span class="brand-mark" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 20v-8M12 15C5 16 3 11 4 5c6-1 10 2 8 10ZM12 12c-1-5 3-9 8-8 1 5-2 9-8 8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      科小贝
+    </header>
+    <main>
+      <section class="content" aria-labelledby="maintenance-title">
+        <div class="illustration" aria-hidden="true">
+          <div class="window"><div class="window-bar"><i></i><i></i><i></i></div><svg width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M8 4 4 8l4 4m8-8 4 4-4 4M7 18h10M10 15h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <span class="status-dot"></span>
+        </div>
+        <p class="label">稍等片刻，我们很快回来</p>
+        <h1 id="maintenance-title">网站正在维护更新中</h1>
+        <p class="description">暂时无法连接网站服务，请稍后再试。<br>感谢你的耐心等待。</p>
+        <button type="button" id="retry"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.55-1.8L20 8M4 16l2.35 2.8A7 7 0 0 0 17.9 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>重新尝试</button>
+        <p class="hint">服务恢复后，点击按钮即可继续访问原页面。</p>
+      </section>
+    </main>
+    <footer>龙湾区国科温州第二幼儿园 · 科小贝智慧成长平台</footer>
+  </div>
+  <script>document.getElementById('retry').addEventListener('click', function () { window.location.reload(); });</script>
+</body>
+</html>

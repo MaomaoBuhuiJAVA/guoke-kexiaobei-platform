@@ -1,0 +1,35 @@
+name: Nginx maintenance fallback
+
+on:
+  push:
+    paths:
+      - 'ops/nginx/**'
+      - '.github/workflows/maintenance-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated Nginx tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nginx
+      - name: Verify page errors, stopped backend, recovery and API responses
+        run: sudo python3 ops/nginx/test_maintenance.py
+      - name: Package the independent static fallback
+        run: |
+          printf '%s\n' '${{ github.sha }}' > BUILD_COMMIT
+          sha256sum ops/nginx/*.py ops/nginx/*.html ops/nginx/*.conf > SHA256SUMS
+          tar -czf maintenance-package.tar.gz BUILD_COMMIT SHA256SUMS ops/nginx
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nginx-maintenance-${{ github.sha }}
+          path: maintenance-package.tar.gz
+          if-no-files-found: error
+          retention-days: 30
