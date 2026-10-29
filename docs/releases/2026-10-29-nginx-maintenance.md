@@ -21,10 +21,11 @@
 
 - 真实 Nginx 的 6 组隔离集成测试全部通过：正常网页、4 类网页服务错误、4 类 API 错误保留、后端停机与恢复、已有登录精确路由保留、内部错误页禁止直接访问。正式 `guoke-web` 未被停止。
 - Chrome/Playwright 检查 1440×900 和 390×844：布局无横向溢出、无 JavaScript 运行错误、无外部资源依赖；模拟恢复后按钮导航状态从 503 变为 200，原路径和参数保持。
-- 上线执行 `nginx -t` 和 `systemctl reload nginx`，二者通过；应用进程 PID 保持 5831，线上 release 仍为 `/opt/guoke/releases/20261028-linux-a1a579c`。
+- 上线执行 `nginx -t` 和 `systemctl reload nginx`，二者通过；本次操作前后应用进程 PID 保持 5831，上线时应用 release 为 `/opt/guoke/releases/20261028-linux-a1a579c`。
 - 正式首页、`/lab`、`/games` 均为 HTTP 200；未登录的 `/api/admin/users` 仍返回 JSON 和 401。
 - 正式浏览器验证首页至资源库导航，抽查 10 个页面引用的 CSS/JS 均为 HTTP 200，未捕获 JavaScript 运行错误。
 - 内部地址 `/_guoke_maintenance.html` 直接请求为 404；维护页不是一个可直接访问的正常业务页面。
+- 最终复核时，独立进行的应用发布已切换到 `/opt/guoke/releases/20261029-mobile-games-nav-r1`。维护页与 Nginx 站点哈希保持一致，首页仍为 200，并重新通过资源库导航及 10 个 CSS/JS 资源检查；应用版本切换不影响独立维护页。
 
 ## 服务器文件和回滚
 
