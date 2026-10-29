@@ -13,6 +13,7 @@ import {
   ExternalLink,
   FileText,
   FlaskConical,
+  Gamepad2,
   House,
   Image as ImageIcon,
   LoaderCircle,
@@ -1178,6 +1179,9 @@ export function ScienceLab({
   initialCategory?: string;
   initialUser?: SessionUser | null;
 }) {
+  const mobileNavItems: MobileAppNavItem[] = initialUser
+    ? [...labMobileNavItems, { key: "games", label: "科学乐园", href: "/games", icon: Gamepad2 }]
+    : labMobileNavItems;
   const [items, setItems] = useState<ScienceKnowledgeSummary[]>(initialItems);
   const [selection, setSelection] = useState<ScienceSelection>(() =>
     normalizeScienceSelection(initialItems, {
@@ -1509,9 +1513,11 @@ export function ScienceLab({
       </header>
 
       <MobileAppNav
-        items={labMobileNavItems}
+        items={mobileNavItems}
         activeKey={selection.category}
-        onSelect={(item) => changeCategory(item.key)}
+        onSelect={(item) => {
+          if (item.key !== "games") changeCategory(item.key);
+        }}
       />
 
       <main>

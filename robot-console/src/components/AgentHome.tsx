@@ -61,6 +61,9 @@ const HOME_MOBILE_MODULE_LAYOUT_DURATION_S = 0.28;
 
 export function AgentHome({ data, initialUser }: AgentHomeProps) {
   const router = useRouter();
+  const mobileNavItems: MobileAppNavItem[] = initialUser
+    ? [...homeCategoryItems, { key: "games", label: "科学乐园", href: "/games", icon: Gamepad2 }]
+    : homeCategoryItems;
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const [pendingCategory, setPendingCategory] = useState<string | null>(null);
   const [homeFade, setHomeFade] = useState(false);
@@ -118,15 +121,6 @@ export function AgentHome({ data, initialUser }: AgentHomeProps) {
           </Link>
 
           <nav className="flex items-center gap-2 text-sm font-medium">
-            <Link
-              aria-label="进入科学乐园"
-              className="inline-flex h-10 items-center gap-2 rounded-[6px] border border-[#c8ddd5] px-3.5 text-[#176b5d] transition hover:bg-[#e6f2ec]"
-              href="/games"
-              title="科学乐园"
-            >
-              <Gamepad2 aria-hidden="true" size={18} />
-              <span className="hidden sm:inline">科学乐园</span>
-            </Link>
             <AccountMenu initialUser={initialUser} />
             <Link className="hidden h-10 items-center rounded-[6px] border border-[#c8ddd5] px-3.5 text-[#176b5d] transition hover:bg-[#e6f2ec] sm:inline-flex" href="/works">
               科学作品
@@ -193,10 +187,6 @@ export function AgentHome({ data, initialUser }: AgentHomeProps) {
                       );
                     })}
               </div>
-
-              <Link className="mt-4 flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[#c5ded5] bg-[#e6f2ec] px-4 py-3 text-[#176b5d] transition hover:bg-[#d9ebdf]" href="/games">
-                <span className="inline-flex items-center gap-3"><Sparkles aria-hidden="true" size={21} /><span><strong className="block text-sm">科学乐园</strong><span className="mt-0.5 block text-xs text-[#59736d]">玩一玩，发现生活里的科学秘密</span></span></span><ArrowRight aria-hidden="true" size={18} />
-              </Link>
 
               <div className="home-hero__support-points mt-9 flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#59736d]">
                 <span className="inline-flex items-center gap-2"><span className="size-2 rounded-full bg-[#176b5d]" />教案与活动支持</span>
@@ -266,7 +256,7 @@ export function AgentHome({ data, initialUser }: AgentHomeProps) {
       <div className="home-page__bottom-anchor" aria-hidden="true" />
 
       <MobileAppNav
-        items={homeCategoryItems}
+        items={mobileNavItems}
         activeKey={pendingCategory ?? ""}
         layoutIdPrefix="home-module"
         layoutDuration={HOME_MOBILE_MODULE_LAYOUT_DURATION_S}
