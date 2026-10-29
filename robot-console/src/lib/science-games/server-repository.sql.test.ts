@@ -17,7 +17,7 @@ let sequence = 0;
 const repository = createGameRepository(database, { now: () => new Date(clock), id: () => `test-${++sequence}` });
 
 beforeAll(async () => {
-  await db.exec('CREATE TABLE "User" ("id" TEXT PRIMARY KEY);');
+  await db.exec('CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "name" TEXT NOT NULL DEFAULT \'测试账号\');');
   const patch = await readFile(new URL("../../../prisma/patches/science-games.sql", import.meta.url), "utf8");
   await db.exec(patch);
   await db.exec(patch);
@@ -25,7 +25,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   // The parent FK's cascade clears only this isolated test database.
-  await db.exec('TRUNCATE TABLE "User" CASCADE; INSERT INTO "User" ("id") VALUES (\'owner-a\'), (\'owner-b\');');
+  await db.exec('TRUNCATE TABLE "User" CASCADE; INSERT INTO "User" ("id", "name") VALUES (\'owner-a\', \'账号甲\'), (\'owner-b\', \'账号乙\');');
   clock = new Date("2026-10-22T04:00:00Z");
   sequence = 0;
 });
@@ -36,6 +36,30 @@ const child = (owner = "owner-a", name = "小星", age: "小班" | "中班" | "�
 const finish = (ownerId: string, profileId: string, gameId = "magnet", eventId = `event-${++sequence}`) => repository.complete(ownerId, { profileId, gameId, eventId });
 
 describe("science games repository against PostgreSQL", () => {
+  it("creates the account's first profile idempotently and preserves existing records", async () => {
+    expect(typeof repository.ensureAccountProfile).toBe("function");
+    const [one, two] = await Promise.all([
+      repository.ensureAccountProfile("owner-a", "账号甲"),
+      repository.ensureAccountProfile("owner-a", "账号甲"),
+    ]);
+    expect(one.profile.id).toBe(two.profile.id);
+    expect(two.progress.profiles).toHaveLength(1);
+    await finish("owner-a", one.profile.id);
+    const restored = await repository.ensureAccountProfile("owner-a", "新昵称");
+    expect(restored.profile.id).toBe(one.profile.id);
+    expect(restored.progress.completions).toHaveLength(1);
+  });
+
+  it("uses one daily reward allowance for an account with legacy child profiles", async () => {
+    const one = await child();
+    const two = await child("owner-a", "旧档案");
+    expect((await finish("owner-a", one.profile.id, "magnet")).points).toBe(10);
+    expect((await finish("owner-a", two.profile.id, "magnet")).points).toBe(0);
+    expect((await finish("owner-a", two.profile.id, "water")).points).toBe(10);
+    expect((await finish("owner-a", one.profile.id, "shadow")).points).toBe(10);
+    expect((await repository.getProgress("owner-a")).completions.reduce((sum, row) => sum + row.points, 0)).toBe(30);
+  });
+
   it("creates and edits children independently for two authenticated owners", async () => {
     const first = await child("owner-a", "芽芽", "小班");
     const second = await child("owner-b", "云云", "大班");
@@ -152,7 +176,7 @@ describe("science games repository against PostgreSQL", () => {
     expect(saved.completions[0].profileId).toBe(first.profile.id);
   });
 
-  it("awards all three hands-on games and caps a child's day at 30 points", async () => {
+  it("awards all three hands-on games and caps an account's day at 30 points", async () => {
     const first = await child();
     const results = await Promise.all(["magnet", "water", "shadow"].map(gameId => finish("owner-a", first.profile.id, gameId)));
     expect(results.map(result => result.points)).toEqual([10, 10, 10]);
@@ -161,7 +185,7 @@ describe("science games repository against PostgreSQL", () => {
     expect(saved.completions).toHaveLength(3);
     expect(explorerStats(saved, first.profile.id, clock)).toMatchObject({ todayPoints: 30, totalPoints: 30, topics: 3 });
     const second = await child("owner-a", "弟弟");
-    expect((await finish("owner-a", second.profile.id, "magnet")).points).toBe(10);
+    expect((await finish("owner-a", second.profile.id, "magnet")).points).toBe(0);
   });
 
   it("rejects invalid profiles and unavailable games without committing partial rewards", async () => {
@@ -177,15 +201,16 @@ describe("science games repository against PostgreSQL", () => {
   });
 
   it("ranks the shared weekly board by age, gives ties the same rank, and exposes only public child fields", async () => {
+    await db.exec('INSERT INTO "User" ("id", "name") VALUES (\'owner-c\', \'账号丙\'), (\'owner-d\', \'账号丁\');');
     const leader = await child("owner-a", "甲", "中班");
-    const tiedA = await child("owner-a", "乙", "中班");
+    const tiedA = await child("owner-c", "乙", "中班");
     const tiedB = await child("owner-b", "丙", "中班");
-    const younger = await child("owner-b", "小小", "小班");
+    const younger = await child("owner-d", "小小", "小班");
     await finish("owner-a", leader.profile.id, "magnet");
     await finish("owner-a", leader.profile.id, "water");
-    await finish("owner-a", tiedA.profile.id, "magnet");
+    await finish("owner-c", tiedA.profile.id, "magnet");
     await finish("owner-b", tiedB.profile.id, "shadow");
-    await finish("owner-b", younger.profile.id, "magnet");
+    await finish("owner-d", younger.profile.id, "magnet");
     const board = await repository.leaderboard("中班");
     expect(board).toMatchObject({ weekStart: "2026-10-19", weekEnd: "2026-10-26" });
     expect(board.rows).toHaveLength(3);
@@ -194,6 +219,18 @@ describe("science games repository against PostgreSQL", () => {
     expect(new Set(board.rows.map(row => row.id))).toEqual(new Set([leader.profile.id, tiedA.profile.id, tiedB.profile.id]));
     for (const row of board.rows) expect(Object.keys(row).sort()).toEqual(["age", "avatar", "id", "name", "rank", "topics", "weekPoints"]);
     expect((await repository.leaderboard("小班")).rows.map(row => row.id)).toEqual([younger.profile.id]);
+  });
+
+  it("aggregates all legacy profiles into one weekly row using the account name", async () => {
+    const first = await child("owner-a", "旧昵称甲");
+    const legacy = await child("owner-a", "旧昵称乙", "小班");
+    await finish("owner-a", first.profile.id, "magnet");
+    await finish("owner-a", legacy.profile.id, "water");
+    const board = await repository.leaderboard("中班");
+    expect(board.rows).toHaveLength(1);
+    expect(board.rows[0]).toMatchObject({ id: first.profile.id, name: "账号甲", weekPoints: 20, topics: 2 });
+    expect((await repository.leaderboard("小班")).rows).toEqual([]);
+    expect((await repository.getProgress("owner-a")).profiles).toHaveLength(2);
   });
 
   it("resets the board exactly at Monday midnight in China while retaining lifetime records", async () => {

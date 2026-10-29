@@ -52,6 +52,14 @@ export function parseProgress(raw: string | null): GameProgress {
 
 export function explorerStats(progress: GameProgress, profileId: string, now = new Date()) {
   const records = progress.completions.filter(record => record.profileId === profileId);
+  return completionStats(records, now);
+}
+
+export function accountStats(progress: GameProgress, now = new Date()) {
+  return completionStats(progress.completions, now);
+}
+
+function completionStats(records: GameCompletion[], now: Date) {
   return {
     totalPoints: records.reduce((sum, record) => sum + record.points, 0),
     weekPoints: records.filter(record => chinaWeek(new Date(record.completedAt)) === chinaWeek(now)).reduce((sum, record) => sum + record.points, 0),

@@ -70,6 +70,18 @@ export function createGameRepository(db: GameDatabase, options: { now?: () => Da
 
   return {
     getProgress(ownerId: string) { return db.transaction(query => progress(query, ownerId)); },
+    ensureAccountProfile(ownerId: string, displayName: string) {
+      return db.transaction(async query => {
+        await ownerLock(query, ownerId);
+        const saved = await progress(query, ownerId);
+        if (saved.profiles.length) return { profile: saved.profiles[0], progress: saved };
+        const name = displayName.replace(/[\u0000-\u001f\u007f]/gu, "").trim().slice(0, 12) || "我的账号";
+        const rows = await query<ProfileRow>(`INSERT INTO "ScienceGameProfile" ("id", "ownerId", "name", "age", "avatar", "createdAt", "updatedAt")
+          VALUES ($1, $2, $3, '中班', 'planet', $4, $4) RETURNING "id", "name", "age", "avatar"`, [id(), ownerId, name, now()]);
+        const profile: ExplorerProfile = { id: rows[0].id, name: rows[0].name, age: rows[0].age, avatar: rows[0].avatar };
+        return { profile, progress: await progress(query, ownerId, profile.id) };
+      });
+    },
     createProfile(ownerId: string, input: unknown) {
       const value = gameProfileInput(input);
       return db.transaction(async query => {
@@ -111,8 +123,8 @@ export function createGameRepository(db: GameDatabase, options: { now?: () => Da
         let completionId = existing[0]?.id;
         let points = 0;
         if (!completionId) {
-          const totals = await query<{ total: string | number } & Record<string, unknown>>('SELECT COALESCE(SUM("points"), 0) AS "total" FROM "ScienceGameCompletion" WHERE "profileId" = $1 AND "day" = $2::date', [value.profileId, day]);
-          points = Math.max(0, Math.min(COMPLETION_POINTS, DAILY_POINT_LIMIT - Number(totals[0].total)));
+          const totals = await query<{ total: string | number; gameCount: string | number } & Record<string, unknown>>('SELECT COALESCE(SUM("points"), 0) AS "total", COUNT(*) FILTER (WHERE "gameId" = $3) AS "gameCount" FROM "ScienceGameCompletion" WHERE "ownerId" = $1 AND "day" = $2::date', [ownerId, day, value.gameId]);
+          points = Number(totals[0].gameCount) ? 0 : Math.max(0, Math.min(COMPLETION_POINTS, DAILY_POINT_LIMIT - Number(totals[0].total)));
           completionId = id();
           await query(`INSERT INTO "ScienceGameCompletion" ("id", "ownerId", "profileId", "gameId", "day", "completedAt", "points")
             VALUES ($1, $2, $3, $4, $5::date, $6, $7)`, [completionId, ownerId, value.profileId, value.gameId, day, receivedAt, points]);
@@ -129,11 +141,14 @@ export function createGameRepository(db: GameDatabase, options: { now?: () => Da
       const end = new Date(`${weekStart}T00:00:00Z`);
       end.setUTCDate(end.getUTCDate() + 7);
       const weekEnd = end.toISOString().slice(0, 10);
-      const rows = await db.query<ProfileRow & { weekPoints: string | number; topics: string | number; rank: string | number }>(`WITH scores AS (
-        SELECT p."id", p."name", p."age", p."avatar", SUM(c."points") AS "weekPoints", COUNT(DISTINCT c."gameId") AS "topics"
-        FROM "ScienceGameProfile" p JOIN "ScienceGameCompletion" c ON c."profileId" = p."id" AND c."ownerId" = p."ownerId"
+      const rows = await db.query<ProfileRow & { weekPoints: string | number; topics: string | number; rank: string | number }>(`WITH primary_profiles AS (
+        SELECT DISTINCT ON ("ownerId") "ownerId", "id", "age", "avatar"
+        FROM "ScienceGameProfile" ORDER BY "ownerId", "createdAt", "id"
+      ), scores AS (
+        SELECT p."id", u."name", p."age", p."avatar", SUM(c."points") AS "weekPoints", COUNT(DISTINCT c."gameId") AS "topics"
+        FROM primary_profiles p JOIN "User" u ON u."id" = p."ownerId" JOIN "ScienceGameCompletion" c ON c."ownerId" = p."ownerId"
         WHERE p."age" = $1 AND c."day" >= $2::date AND c."day" < $3::date
-        GROUP BY p."id", p."name", p."age", p."avatar" HAVING SUM(c."points") > 0
+        GROUP BY p."id", u."name", p."age", p."avatar" HAVING SUM(c."points") > 0
       ) SELECT *, RANK() OVER (ORDER BY "weekPoints" DESC) AS "rank" FROM scores
       ORDER BY "weekPoints" DESC, "name", "id"`, [validAge, weekStart, weekEnd]);
       return { rows: rows.map(row => ({ id: row.id, name: row.name, age: row.age, avatar: row.avatar, weekPoints: Number(row.weekPoints), topics: Number(row.topics), rank: Number(row.rank) }) satisfies GameLeaderboardRow), weekStart, weekEnd };

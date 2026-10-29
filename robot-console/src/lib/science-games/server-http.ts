@@ -8,11 +8,11 @@ export function gameReply(body: unknown, status = 200) {
 }
 export function gameError(error: unknown) {
   if (error instanceof GameServerError) return gameReply({ error: error.message }, error.status);
-  return gameReply({ error: "科学游戏账号服务暂未就绪，请稍后重试。试玩记录仍保存在当前浏览器。" }, 503);
+  return gameReply({ error: "游戏记录暂时无法连接，请稍后重试。" }, 503);
 }
 export async function gameUser(request?: Request) {
   const user = await getSessionUser();
-  if (!user || user.id === "public-participant") throw new GameServerError("请先登录，再保存孩子的游戏记录。", 401);
+  if (!user || user.id === "public-participant") throw new GameServerError("请先登录，再保存游戏记录。", 401);
   const expected = request?.headers.get("x-game-account-id");
   if (expected && expected !== user.id) throw new GameServerError("账号已切换，请刷新游戏记录后再试。", 409);
   return user;

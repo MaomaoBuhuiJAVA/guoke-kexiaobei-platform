@@ -16,20 +16,20 @@ const navigation = [
 
 function Content({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ready, storageError, profile, recordSource } = useGameProgress();
+  const { ready, storageError, profile, account } = useGameProgress();
   const playing = pathname.startsWith("/games/play/");
   return <div className={styles.app} data-playing={playing}>
     <header className={styles.header}>
       <div className={styles.headerInner}>
         <Link href={playing ? "/games" : "/"} className={styles.backLink} aria-label={playing ? "返回科学乐园" : "返回科小贝首页"}><ArrowLeft size={19} /><span>{playing ? "返回乐园" : "科小贝首页"}</span></Link>
-        {playing && ready ? <Link href="/games/growth" className={styles.playingProfile} aria-label={`当前孩子：${profile.name}，切换孩子档案`}><ExplorerAvatar kind={profile.avatar} /><span><strong>{profile.name}</strong><small>{recordSource === "account" ? "账号手册 · 科学实验台" : "本机手册 · 科学实验台"}</small></span></Link> : <Link href="/games" className={styles.brand}><span className={styles.brandMark}><Atom size={23} strokeWidth={1.6} /></span><span>科小贝<span className={styles.brandSuffix}> · 科学乐园</span></span></Link>}
+        {playing && ready ? <Link href="/games/growth" className={styles.playingProfile} aria-label={`当前账号：${account?.name ?? "未登录"}，查看游戏记录`}><ExplorerAvatar kind={profile.avatar} /><span><strong>{account?.name ?? "未登录"}</strong><small>科学实验台</small></span></Link> : <Link href="/games" className={styles.brand}><span className={styles.brandMark}><Atom size={23} strokeWidth={1.6} /></span><span>科小贝<span className={styles.brandSuffix}> · 科学乐园</span></span></Link>}
         <Link href="/games/leaderboard" className={styles.artLink} aria-label="排行榜"><Trophy size={17} strokeWidth={1.6} aria-hidden="true" /><span>排行榜</span></Link>
       </div>
     </header>
     <main className={`${styles.main} ${playing ? styles.playMain : ""}`}>
-      {storageError && <p className={styles.storageNotice} role="status">浏览器暂时无法保存记录，本次仍可游玩，关闭页面后进度可能丢失。</p>}
+      {storageError && <p className={styles.storageNotice} role="status">浏览器暂时无法缓存待保存记录，请保持联网。</p>}
       {ready && <GameSyncNotice />}
-      {ready ? <Fragment key={`${recordSource}:${profile.id}`}>{children}</Fragment> : <div className={styles.loading} role="status"><Sprout size={30} /><p>正在打开你的探索手册…</p></div>}
+      {ready ? <Fragment key={`${account?.id ?? "guest"}:${profile.id}`}>{children}</Fragment> : <div className={styles.loading} role="status"><Sprout size={30} /><p>正在加载游戏记录…</p></div>}
     </main>
     {!playing && <nav className={styles.bottomNav} aria-label="科学乐园导航">{navigation.map(item => {
       const active = pathname === item.href;

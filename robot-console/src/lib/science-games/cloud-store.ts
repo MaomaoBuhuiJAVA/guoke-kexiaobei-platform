@@ -18,6 +18,7 @@ const PENDING_REWARD: GameReward = { points: 0, reason: "已完成，积分待�
 
 type SessionStorage = Pick<Storage, "getItem" | "setItem">;
 type StoreOptions = {
+  accountOnly?: boolean;
   fetch?: typeof fetch;
   storage?: () => CloudStorage;
   sessionStorage?: () => SessionStorage;
@@ -46,6 +47,7 @@ export function readCloudProgress(value: unknown): GameProgress {
 }
 
 export function createCloudProgressStore(options: StoreOptions = {}) {
+  const accountOnly = options.accountOnly === true;
   const device = options.deviceStore ?? createProgressStore();
   const getStorage = options.storage ?? (() => localStorage);
   const getSession = options.sessionStorage ?? (() => sessionStorage);
@@ -55,7 +57,7 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
   const listeners = new Set<() => void>();
   const controllers = new Set<AbortController>();
   const tabMemory = new Map<string, string>();
-  let source: "device" | "account" = "device";
+  let source: "device" | "account" = accountOnly ? "account" : "device";
   let account: CloudAccount | null = null;
   let accountProgress = emptyAccountProgress();
   let cloudStatus: CloudStatus = "checking";
@@ -69,7 +71,7 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
   let busy = 0;
   let unsubscribeDevice: (() => void) | null = null;
   let serial: Promise<unknown> = Promise.resolve();
-  const initial: CloudProgressSnapshot = { ...device.getServerSnapshot(), recordSource: source, account: null, cloudStatus, cloudError: null, cloudBusy: false, pendingCount: 0 };
+  const initial: CloudProgressSnapshot = { ...device.getServerSnapshot(), ...(accountOnly ? { progress: emptyAccountProgress() } : {}), recordSource: source, account: null, cloudStatus, cloudError: null, cloudBusy: false, pendingCount: 0 };
   let snapshot: CloudProgressSnapshot = initial;
 
   function publish() {
@@ -92,7 +94,7 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
     catch { storageError = true; return null; }
   }
   function applyProgress(progress: GameProgress, accountId: string, selected?: string, persistCache = true) {
-    const pinned = selected ?? tabValue(accountId, "profile") ?? accountProgress.activeProfileId;
+    const pinned = accountOnly ? progress.profiles[0]?.id : selected ?? tabValue(accountId, "profile") ?? accountProgress.activeProfileId;
     accountProgress = { ...progress, activeProfileId: progress.profiles.some(profile => profile.id === pinned) ? pinned : progress.profiles[0]?.id ?? "" };
     if (accountProgress.activeProfileId) tabValue(accountId, "profile", accountProgress.activeProfileId);
     if (persistCache) {
@@ -108,7 +110,7 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
   function setIdentity(next: CloudAccount | null) {
     if (account?.id !== next?.id) {
       epoch++;
-      source = "device";
+      source = accountOnly ? "account" : "device";
       accountProgress = emptyAccountProgress();
       account = next;
       if (next) restoreCache(next.id);
@@ -132,7 +134,7 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
   }
   function errorState(error: unknown) {
     if (error instanceof CloudRequestError && error.status === 401) {
-      setIdentity(null); cloudStatus = "ready"; cloudError = "登录已失效，已返回本机记录。待同步探索仍保留在原账号。"; publish(); return;
+      setIdentity(null); cloudStatus = "ready"; cloudError = accountOnly ? "登录已失效，请重新登录后继续保存。" : "登录已失效，已返回本机记录。待同步探索仍保留在原账号。"; publish(); return;
     }
     identityConfirmed = false;
     cloudStatus = error instanceof CloudRequestError ? "error" : "offline";
@@ -157,8 +159,12 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
   }
   function isCurrent(accountId: string, stamp: number) { return active && identityConfirmed && account?.id === accountId && stamp === epoch; }
   async function fetchProgress(accountId: string, stamp: number) {
-    const data = await json<{ progress: unknown }>("/api/games/progress", { headers: { "X-Game-Account-Id": accountId } });
+    let data = await json<{ progress: unknown }>("/api/games/progress", { headers: { "X-Game-Account-Id": accountId } });
     if (!isCurrent(accountId, stamp)) return false;
+    if (accountOnly && !readCloudProgress(data.progress).profiles.length) {
+      data = await json<{ progress: unknown }>("/api/games/account", { method: "POST", headers: { "Content-Type": "application/json", "X-Game-Account-Id": accountId }, body: "{}" });
+      if (!isCurrent(accountId, stamp)) return false;
+    }
     applyProgress(readCloudProgress(data.progress), accountId);
     publish(); return true;
   }
@@ -205,7 +211,7 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
       const current = await verifyIdentity();
       if (!current) return;
       const stamp = epoch;
-      if (source !== "account" && tabValue(current.id, "source") === "account") source = "account";
+      if (accountOnly || source !== "account" && tabValue(current.id, "source") === "account") source = "account";
       if (source === "account") {
         if (await fetchProgress(current.id, stamp)) await flush(current.id, stamp);
       }
@@ -241,15 +247,18 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
     },
     revalidate() { identityConfirmed = false; identityRequest++; return enqueue(refresh); },
     selectProfile(id: string) {
+      if (accountOnly) return;
       if (source === "device") device.selectProfile(id);
       else if (account && accountProgress.profiles.some(profile => profile.id === id)) { accountProgress = { ...accountProgress, activeProfileId: id }; tabValue(account.id, "profile", id); publish(); }
     },
     useDeviceRecords() {
+      if (accountOnly) return;
       epoch++; sourceIntent++; source = "device";
       if (account) tabValue(account.id, "source", "device");
       cloudError = null; publish();
     },
     openAccountRecords(): Promise<boolean> {
+      if (accountOnly) return enqueue(async () => { await refresh(); return Boolean(account && accountProgress.profiles.length); });
       const intent = ++sourceIntent;
       return enqueue(() => working(async () => {
         try {
@@ -268,6 +277,7 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
       }));
     },
     startAccountProfile(): Promise<boolean> {
+      if (accountOnly) return enqueue(async () => { await refresh(); return Boolean(account && accountProgress.profiles.length); });
       const intent = ++sourceIntent;
       const local = device.getSnapshot().progress;
       const profile = local.profiles.find(item => item.id === local.activeProfileId) ?? local.profiles[0];
@@ -287,6 +297,7 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
       }));
     },
     saveProfile(name: string, age: AgeGroup, avatar: ExplorerProfile["avatar"], create: boolean): Promise<boolean> {
+      if (accountOnly && !account) { cloudError = "请先登录，再保存游戏设置。"; publish(); return Promise.resolve(false); }
       const trimmed = name.trim().slice(0, 12);
       if (!trimmed) return Promise.resolve(false);
       if (source === "device") { device.saveProfile(trimmed, age, avatar, create); return Promise.resolve(true); }
@@ -306,10 +317,11 @@ export function createCloudProgressStore(options: StoreOptions = {}) {
       }));
     },
     finishGame(gameId: GameId): Promise<GameReward> {
+      if (accountOnly && !account) return Promise.resolve({ points: 0, reason: "登录后即可保存游戏记录。" });
       if (source === "device") return Promise.resolve(device.finishGame(gameId));
       const accountId = account?.id;
       const profileId = accountProgress.activeProfileId;
-      if (!accountId || !accountProgress.profiles.some(profile => profile.id === profileId)) return Promise.resolve({ points: 0, reason: "请先添加账号孩子档案，再记录探索积分。" });
+      if (!accountId || !accountProgress.profiles.some(profile => profile.id === profileId)) return Promise.resolve({ points: 0, reason: accountOnly ? "账号记录暂时无法读取，请稍后再试。" : "请先添加账号孩子档案，再记录探索积分。" });
       const entry = { accountId, profileId, gameId, eventId: makeEventId() };
       if (!isPendingGameCompletion(entry)) return Promise.resolve({ points: 0, reason: "这个游戏或孩子档案暂时无法记录积分，请刷新后再试。" });
       outbox.add(entry); publish();

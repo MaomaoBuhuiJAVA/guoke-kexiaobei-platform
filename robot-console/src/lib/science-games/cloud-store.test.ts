@@ -16,7 +16,7 @@ const child = (id: string, name = id): ExplorerProfile => ({ id, name, age: "中
 const cloudProgress = (profiles = [child("child-a"), child("child-b")]): GameProgress => ({ version: 1, activeProfileId: profiles[0]?.id ?? "", profiles, completions: [] });
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
 
-function environment(storage = new MemoryStorage(), tab = new MemoryStorage()) {
+function environment(storage = new MemoryStorage(), tab = new MemoryStorage(), accountOnly = false) {
   let user: { id: string; name: string } | null = { id: "account-a", name: "家长 A" };
   let offline = false;
   let progress = cloudProgress();
@@ -32,6 +32,10 @@ function environment(storage = new MemoryStorage(), tab = new MemoryStorage()) {
     if (String(url) === "/api/auth/me") return response({ user });
     if (!user) return response({ error: "请先登录" }, 401);
     if (String(url) === "/api/games/progress") return response({ progress });
+    if (String(url) === "/api/games/account") {
+      if (!progress.profiles.length) progress = cloudProgress([child("account-profile", user.name)]);
+      return response({ profile: progress.profiles[0], progress });
+    }
     if (String(url) === "/api/games/profiles") {
       const profile = { ...body, id: "created-child" } as ExplorerProfile;
       progress = { ...progress, profiles: [...progress.profiles, profile] };
@@ -53,7 +57,7 @@ function environment(storage = new MemoryStorage(), tab = new MemoryStorage()) {
   }) as typeof fetch;
   const device = createProgressStore({ storage: () => storage, sessionStorage: () => tab });
   let eventSequence = 0;
-  const store = createCloudProgressStore({ fetch: transport, storage: () => storage, sessionStorage: () => tab, deviceStore: device, eventId: () => `event-${++eventSequence}` });
+  const store = createCloudProgressStore({ fetch: transport, storage: () => storage, sessionStorage: () => tab, deviceStore: device, accountOnly, eventId: () => `event-${++eventSequence}` });
   return {
     store, storage, tab, requests, device,
     set user(value: typeof user) { user = value; },
@@ -66,6 +70,71 @@ function environment(storage = new MemoryStorage(), tab = new MemoryStorage()) {
 }
 
 describe("account game records", () => {
+  it("automatically opens the new account after switching without replaying the previous account's queue", async () => {
+    const env = environment(new MemoryStorage(), new MemoryStorage(), true);
+    const disconnect = env.store.connect();
+    try {
+      await env.store.retrySync();
+      env.offline = true;
+      expect(await env.store.finishGame("water")).toMatchObject({ points: 0, pending: true });
+      env.offline = false;
+      env.user = { id: "account-b", name: "家长 B" };
+      env.progress = cloudProgress([child("account-b-profile")]);
+      await env.store.revalidate();
+      expect(env.store.getSnapshot()).toMatchObject({ account: { id: "account-b" }, recordSource: "account", progress: { activeProfileId: "account-b-profile", completions: [] }, pendingCount: 0 });
+      expect(env.submittedEvents).toBe(0);
+      env.user = { id: "account-a", name: "家长 A" };
+      env.progress = cloudProgress();
+      await env.store.revalidate();
+      expect(env.submittedEvents).toBe(1);
+      expect(env.store.getSnapshot()).toMatchObject({ pendingCount: 0, progress: { completions: [{ gameId: "water" }] } });
+    } finally { disconnect(); }
+  });
+
+  it("account-only mode automatically opens server records without importing device scores", async () => {
+    const env = environment(new MemoryStorage(), new MemoryStorage(), true);
+    env.device.load();
+    env.device.finishGame("magnet");
+    const local = env.storage.getItem(GAME_PROGRESS_STORAGE_KEY);
+    const disconnect = env.store.connect();
+    try {
+      await env.store.retrySync();
+      expect(env.store.getSnapshot()).toMatchObject({ recordSource: "account", progress: { activeProfileId: "child-a", completions: [] } });
+      expect(await env.store.finishGame("water")).toMatchObject({ points: 10 });
+      expect(env.submittedEvents).toBe(1);
+      expect(env.storage.getItem(GAME_PROGRESS_STORAGE_KEY)).toBe(local);
+      env.store.useDeviceRecords();
+      expect(env.store.getSnapshot().recordSource).toBe("account");
+    } finally { disconnect(); }
+  });
+
+  it("account-only mode initializes an empty account automatically and only once", async () => {
+    const env = environment(new MemoryStorage(), new MemoryStorage(), true);
+    env.progress = cloudProgress([]);
+    const disconnect = env.store.connect();
+    try {
+      await env.store.retrySync();
+      await env.store.retrySync();
+      expect(env.store.getSnapshot()).toMatchObject({ recordSource: "account", progress: { activeProfileId: "account-profile", profiles: [{ name: "家长 A" }], completions: [] } });
+      expect(env.requests.filter(request => request.url === "/api/games/account")).toHaveLength(1);
+      expect(env.requests.find(request => request.url === "/api/games/account")?.body).toEqual({});
+    } finally { disconnect(); }
+  });
+
+  it("account-only mode never awards guest scores and clears account records at logout", async () => {
+    const env = environment(new MemoryStorage(), new MemoryStorage(), true);
+    const disconnect = env.store.connect();
+    try {
+      await env.store.retrySync();
+      await env.store.finishGame("magnet");
+      env.user = null;
+      await env.store.retrySync();
+      expect(env.store.getSnapshot()).toMatchObject({ account: null, progress: { profiles: [], completions: [] } });
+      expect(await env.store.finishGame("water")).toMatchObject({ points: 0, reason: expect.stringContaining("登录") });
+      expect(env.submittedEvents).toBe(1);
+    } finally { disconnect(); }
+  });
+
   it("leaves device records untouched and enters account mode only after an explicit action", async () => {
     const env = environment();
     const disconnect = env.store.connect();

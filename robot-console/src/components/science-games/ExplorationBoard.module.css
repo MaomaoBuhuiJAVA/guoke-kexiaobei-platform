@@ -13,6 +13,8 @@
 .ageTabs button { border:0; padding:9px 24px; min-height:44px; min-width:81px; border-radius:7px; color:#858984; background:none; font-size:12px; transition:background .15s,color .15s; }
 .ageTabs .tabActive { background:#fff; color:var(--ink); box-shadow:0 2px 4px #243a400c; font-weight:650; }
 .participants { color:#8b8e87; font-size:11px; }
+.refreshBoard { flex-shrink:0; display:grid; place-items:center; width:44px; height:44px; border:1px solid #d9e7e2; border-radius:8px; color:#637b78; background:#fff; cursor:pointer; }
+.refreshBoard:focus-visible { outline:2px solid #5076b1; outline-offset:3px; }
 .sourceTabs { display:flex; align-items:center; gap:22px; margin-bottom:19px; border-bottom:1px solid #d9e7e2; }
 .sourceTabs>button { border:0; background:none; min-height:44px; padding:9px 0; color:#92988d; font-size:12px; border-bottom:2px solid transparent; }
 .sourceTabs>button[aria-pressed=true] { border-color:#cc7c5a; color:#344a5f; font-weight:600; }
@@ -91,6 +93,10 @@
   .rules { font-size:10px; }
 }
 @media(max-width:359px) {
+  .boardToolbar { display:grid; grid-template-columns:minmax(0,1fr) 44px; grid-template-areas:"ages refresh" "participants participants"; }
+  .ageTabs { grid-area:ages; width:fit-content; }
+  .participants { grid-area:participants; }
+  .refreshBoard { grid-area:refresh; }
   .heading { display:block; }
   .board .heading h1 { font-size:30px; }
   .board .subtitle { max-width:none; }

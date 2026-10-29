@@ -11,11 +11,12 @@ import { POST as createProfile } from "../../../app/api/games/profiles/route";
 import { PATCH as updateProfile } from "../../../app/api/games/profiles/[profileId]/route";
 import { POST as complete } from "../../../app/api/games/completions/route";
 import { GET as board } from "../../../app/api/games/leaderboard/route";
+import { POST as ensureAccount } from "../../../app/api/games/account/route";
 
 const profile = { id: "child-a", name: "芽芽", age: "中班", avatar: "seed" };
 const progress = { version: 1, activeProfileId: "child-a", profiles: [profile], completions: [] };
 const repository = {
-  getProgress: vi.fn(), createProfile: vi.fn(), updateProfile: vi.fn(), complete: vi.fn(), leaderboard: vi.fn(),
+  getProgress: vi.fn(), createProfile: vi.fn(), ensureAccountProfile: vi.fn(), updateProfile: vi.fn(), complete: vi.fn(), leaderboard: vi.fn(),
 };
 const user = { id: "owner-a", name: "家长", role: "USER" as const };
 
@@ -29,12 +30,19 @@ beforeEach(() => {
   vi.mocked(getGameRepository).mockReturnValue(repository as never);
   repository.getProgress.mockResolvedValue(progress);
   repository.createProfile.mockResolvedValue({ profile, progress });
+  repository.ensureAccountProfile.mockResolvedValue({ profile, progress });
   repository.updateProfile.mockResolvedValue({ profile, progress });
   repository.complete.mockResolvedValue({ progress, points: 10, reason: "完成探索" });
   repository.leaderboard.mockResolvedValue({ rows: [{ ...profile, weekPoints: 10, topics: 1, rank: 1 }], weekStart: "2026-10-19", weekEnd: "2026-10-26" });
 });
 
 describe("science game server routes", () => {
+  it("opens the authenticated account's record without client-supplied profile details", async () => {
+    const response = await ensureAccount(request("account", {}));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ profile, progress });
+    expect(repository.ensureAccountProfile).toHaveBeenCalledWith(user.id, user.name);
+  });
   it("requires real sessions and never falls back to the anonymous public actor", async () => {
     vi.mocked(getSessionUser).mockResolvedValueOnce(null);
     const unauthenticated = await getProgress(new Request("https://school.example/api/games/progress"));

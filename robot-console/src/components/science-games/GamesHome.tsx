@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { ArrowRight, Check, MoveUpRight } from "lucide-react";
-import { explorerStats } from "@/lib/science-games/progress";
+import { accountStats } from "@/lib/science-games/progress";
 import { useGameProgress } from "./GameProvider";
-import { ExplorerAvatar } from "./ExplorerAvatar";
 import { MagnetIllustration, ShadowIllustration, WaterIllustration } from "./HomeGameIllustrations";
 import styles from "./GamesHome.module.css";
 
 export function GamesHome() {
-  const { profile, progress, recordSource } = useGameProgress();
-  const stats = explorerStats(progress, profile.id);
+  const { progress } = useGameProgress();
+  const stats = accountStats(progress);
   const magnetDone = stats.completedToday.includes("magnet");
   const waterDone = stats.completedToday.includes("water");
   const shadowDone = stats.completedToday.includes("shadow");
@@ -60,21 +59,5 @@ export function GamesHome() {
       <Link href="/games/play/shadow" className={styles.shadowButton}>{shadowDone ? "再玩一次" : "打开灯光"}<ArrowRight size={18} /></Link>
     </article>
 
-    <section className={styles.notebook} aria-label="我的游戏记录">
-      <Link className={styles.profile} href="/games/growth">
-        <span className={styles.profileIcon}><ExplorerAvatar kind={profile.avatar} /></span>
-        <span><strong>{profile.name}</strong><small>{profile.age} · 我的游戏记录</small></span>
-      </Link>
-      <div className={styles.weekScore}><strong>{stats.weekPoints}<small> 分</small></strong><span>本周积分</span></div>
-      <div className={styles.topicScore}><strong>{stats.topics}<small> 个</small></strong><span>玩过的主题</span></div>
-      <div className={styles.recordLinks}>
-        <Link href="/games/growth">成长记录 <ArrowRight size={15} /></Link>
-      </div>
-    </section>
-
-    <footer className={styles.pageFooter}>
-      <p>每天首次完成每款游戏 +10 分<span> · </span>{recordSource === "account" ? "账号手册，可在其他设备继续" : "本机手册，保存在这台设备"}</p>
-      <Link href="/lab?type=%E7%A7%91%E5%AD%A6%E5%AE%9E%E9%AA%8C">寻找更多科学实验 <MoveUpRight size={14} /></Link>
-    </footer>
   </div>;
 }

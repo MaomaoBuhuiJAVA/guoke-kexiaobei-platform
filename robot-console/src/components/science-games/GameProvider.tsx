@@ -20,7 +20,7 @@ type GameContextValue = {
 const GameContext = createContext<GameContextValue | null>(null);
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  const [store] = useState(createCloudProgressStore);
+  const [store] = useState(() => createCloudProgressStore({ accountOnly: true }));
   const { progress, ready, storageError, recordSource, account, cloudStatus, cloudError, cloudBusy, pendingCount } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
   const [artworkIds, setArtworkIds] = useState<string[]>([]);
 
@@ -57,7 +57,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, []);
 
-  const profile = progress.profiles.find(item => item.id === progress.activeProfileId) ?? progress.profiles[0] ?? EMPTY_ACCOUNT_PROFILE;
+  const profile = progress.profiles.find(item => item.id === progress.activeProfileId) ?? progress.profiles[0] ?? { ...EMPTY_ACCOUNT_PROFILE, name: account ? "正在加载记录" : "未登录" };
   return <GameContext.Provider value={{
     progress, profile, ready, storageError, artworkIds,
     recordSource, account, cloudStatus, cloudError, cloudBusy, pendingCount,

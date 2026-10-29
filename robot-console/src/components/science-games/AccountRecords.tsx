@@ -21,7 +21,7 @@ export function AccountRecords() {
 }
 
 export function GameSyncNotice() {
-  const { recordSource, pendingCount, cloudError, cloudBusy, retrySync } = useGameProgress();
-  if (recordSource !== "account" || !pendingCount && !cloudError) return null;
-  return <div className={styles.syncNotice} role="status"><Cloud size={16} /><span>{cloudError || `${pendingCount} 条完成记录待同步，联网后可重试。`}</span><button type="button" onClick={() => void retrySync()} disabled={cloudBusy}>{cloudBusy ? "同步中…" : "重试"}</button></div>;
+  const { account, pendingCount, cloudError, cloudBusy, retrySync } = useGameProgress();
+  if (!account || !pendingCount && !cloudError) return null;
+  return <div className={styles.syncNotice} role="status"><Cloud size={16} /><span>{cloudError || "正在保存游戏记录…"}</span>{cloudError && <button type="button" onClick={() => void retrySync()} disabled={cloudBusy}>{cloudBusy ? "正在重试…" : "重试"}</button>}</div>;
 }
