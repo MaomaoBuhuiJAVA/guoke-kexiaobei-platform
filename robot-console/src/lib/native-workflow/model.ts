@@ -20,11 +20,13 @@ export function modelConfig(vision = false, voiceCall = false) {
   };
 }
 
-export async function completeModel({messages, vision = false, voiceCall = false, json = false, signal, onDelta, maxTokens, fetchImpl = fetch}: {
+export async function completeModel({messages, vision = false, voiceCall = false, json = false, thinking, preferTextModel = false, signal, onDelta, maxTokens, fetchImpl = fetch}: {
   messages: ModelMessage[]; vision?: boolean; voiceCall?: boolean; json?: boolean;
   signal?: AbortSignal; onDelta?: (text: string) => void; maxTokens?: number; fetchImpl?: typeof fetch;
+  thinking?: boolean;
+  preferTextModel?: boolean;
 }): Promise<string> {
-  const config = modelConfig(vision, voiceCall);
+  const config = modelConfig(vision, voiceCall && !preferTextModel);
   if (!config.key) throw new ModelUnavailableError();
   const controller = new AbortController();
   const timeoutMs = voiceCall ? 12_000 : vision ? 40_000 : 75_000;
@@ -40,7 +42,7 @@ export async function completeModel({messages, vision = false, voiceCall = false
       body:JSON.stringify({model:config.model, messages, temperature:voiceCall ? 0.3 : 0.2,
         max_tokens:maxTokens ?? (voiceCall ? 160 : 4000), stream:streaming,
         ...(json ? {response_format:{type:"json_object"}} : {}),
-        enable_thinking: !voiceCall,
+        enable_thinking: !voiceCall && (thinking ?? true),
       }),
     });
     if (!response.ok) { await response.body?.cancel(); throw new ModelUnavailableError(`模型服务返回 ${response.status}，请检查配置或稍后重试。`); }

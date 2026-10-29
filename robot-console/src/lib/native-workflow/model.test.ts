@@ -3,6 +3,27 @@ import { completeModel, modelConfig, ModelUnavailableError } from "./model";
 
 afterEach(() => vi.unstubAllEnvs());
 describe("direct model transport", () => {
+  it("uses the text model for spoken stories while retaining the short voice budget", async () => {
+    vi.stubEnv("QWEN_TTS_API_KEY", "test-key");
+    let body: Record<string, unknown> = {};
+    await completeModel({ messages: [{role: "user", content: "讲个风的故事"}], voiceCall: true, preferTextModel: true, fetchImpl: async (_url, init) => {
+      body = JSON.parse(String(init?.body));
+      return Response.json({ choices: [{ message: {content: "纸船动了，原来风是流动的空气。"} }] });
+    }});
+    expect(body.model).toBe("qwen3.5-plus");
+    expect(body.enable_thinking).toBe(false);
+    expect(body.max_tokens).toBe(160);
+  });
+  it("can disable thinking for direct conversational delivery without changing the model", async () => {
+    vi.stubEnv("QWEN_TTS_API_KEY", "test-key");
+    let body: Record<string, unknown> = {};
+    await completeModel({ messages: [{role: "user", content: "讲个故事"}], thinking: false, fetchImpl: async (_url, init) => {
+      body = JSON.parse(String(init?.body));
+      return Response.json({ choices: [{ message: {content: "原创科学故事"} }] });
+    }});
+    expect(body.model).toBe("qwen3.5-plus");
+    expect(body.enable_thinking).toBe(false);
+  });
   it("uses the shared speech key and Qwen Plus for normal replies even when stale provider configuration exists", () => {
     vi.stubEnv("QWEN_TTS_API_KEY", "shared-key");
     vi.stubEnv("DEEPSEEK_API_KEY", "obsolete-key");

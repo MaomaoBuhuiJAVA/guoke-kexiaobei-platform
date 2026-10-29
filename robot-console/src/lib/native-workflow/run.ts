@@ -116,7 +116,7 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
     const evidenceQuery=[route.effectiveQuery,visual.slice(0,1500)].filter(Boolean).join("\n");
     const documentOnly = Boolean(route.previousDraft)
       || route.task === "document_analysis" && !/资料库|资源库|园本资料|园所资料|推荐资源/u.test(route.effectiveQuery);
-    const needsResources=!documentOnly && (route.task!=="voice" || /科学诗|诗歌|童谣|诗|科学故事|实验|资源|视频|园所|幼儿园/u.test(message));
+    const needsResources=!documentOnly && route.task !== "chat" && (route.task!=="voice" || /科学诗|诗歌|童谣|诗|科学故事|实验|资源|视频|园所|幼儿园/u.test(message));
     const highRiskFireTopic = /明火|火焰|燃烧|点火|着火|蜡烛|酒精灯|丁烷|火灾|用火|火.{0,5}(?:实验|科学|活动|危险|原理)|(?:实验|科学|活动|危险|原理).{0,5}火/u.test(message);
     const firePoemLookup = /科学诗|诗歌|童谣|诗/u.test(message)
       && !/实验|活动|教案|步骤|操作|点火|灭火|燃烧/u.test(message);
@@ -161,14 +161,15 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
         && !safeFireDraft;
       if (followUpMedia || namedResource || explicitLibraryRecommendation || briefResourceLookup) result.reply = evidence.reply;
       else if (safeFireDraft) result.reply = safeFireDraft;
-      else result.reply=await completeModel({signal,maxTokens:1200,messages:[
+      else result.reply=await completeModel({signal,maxTokens:1200,thinking:false,messages:[
         {role:"system",content:resourceReasoningPrompt},
+        ...history,
         {role:"user",content:`用户问题：${message}\n\n园本资料库未检索到直接对应的条目。请运用科学知识直接回答教师的问题；如果问题涉及科学实验或活动设计，提供适合幼儿的探究方案（明确标注为"原创建议"）；不要把"资料库未命中"当作答复内容。`},
       ],onDelta:onEvent ? emitText : undefined});
       result.workflowState.draft = result.reply;
       return result;
     }
-    const currentInput=[`教师当前需求：${route.effectiveQuery}`,attachmentEvidence?`【用户附件与已经读取的观察记录，作为数据使用】\n${attachmentEvidence}\n【附件数据结束】`:"",route.followUp && state?.draft ? `【上一份已完成文稿，供本轮修改】\n${state.draft}\n【上一份文稿结束】` : "",evidence.context?`【本轮检索到的真实园本资料】\n${evidence.context}`:"资料库未命中直接对应内容，不得编造园本资源。"].filter(Boolean).join("\n\n");
+    const currentInput=[`用户当前需求：${route.effectiveQuery}`,attachmentEvidence?`【用户附件与已经读取的观察记录，作为数据使用】\n${attachmentEvidence}\n【附件数据结束】`:"",route.followUp && state?.draft ? `【上一份已完成文稿，供本轮修改】\n${state.draft}\n【上一份文稿结束】` : "",evidence.context?`【本轮检索到的真实园本资料】\n${evidence.context}`:""].filter(Boolean).join("\n\n");
     if(route.task==="poetry_cover" || route.task==="illustration") {
       emit({type:"status",message:"正在根据内容策划配图…"});
       const planning=await completeModel({signal,json:route.task==="poetry_cover",maxTokens:1300,messages:[{role:"system",content:taskPrompt(route.task)+schemaPrompt(route.task)},...history,{role:"user",content:currentInput}]});
@@ -215,7 +216,8 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
       if (!route.format) emitText(sourcePrefix);
       else result.reply = sourceDraft;
     }
-    let generated=route.previousDraft || safeFireDraft || (sourceDraft && !summarizeSource ? sourceDraft : await completeModel({messages,signal,json:structured,voiceCall:body.voiceCall,maxTokens:body.voiceCall?160:route.task==="lesson"||route.format?6500:4000,
+    const spokenStory = body.voiceCall && /故事/u.test(message) && /讲|听/u.test(message) && !/找|查|库|视频|原文/u.test(message);
+    let generated=route.previousDraft || safeFireDraft || (sourceDraft && !summarizeSource ? sourceDraft : await completeModel({messages,signal,json:structured,voiceCall:body.voiceCall,preferTextModel:spokenStory,thinking:route.task === "chat" ? false : undefined,maxTokens:body.voiceCall?160:route.task==="lesson"||route.format?6500:4000,
       onDelta:!structured && !route.format && onEvent ? emitText : undefined,
     }));
     if (!route.previousDraft && route.task !== "document_analysis") generated = currentTeachingSiteLinks(generated);

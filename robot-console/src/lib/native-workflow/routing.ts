@@ -37,6 +37,7 @@ function requestedFormat(message: string): TeachingFormat | undefined {
 
 function continuation(text: string) {
   return /刚才|上面|上一|这份|这个|它的|它们|继续|改成|改为|换成|换为|再导出|重新导出|还有.*(?:图|视频|资源)/u.test(text)
+    || /短一点|短点|长一点|长点|简单一点|简单点|详细一点|详细点|给(?:托班|小班|中班|大班)听|再讲一个|换一个故事|再来一个/u.test(text)
     || /^(?:请|帮我|给我)?(?:导出|下载|转成|转换为|保存为)\s*(?:word|docx|pdf|pptx?|excel|xlsx?)[。！!\s]*$/iu.test(text);
 }
 
@@ -97,6 +98,17 @@ function requestedTask(message: string, effectiveQuery: string, attachmentType?:
   if (attachmentType === "document") return "document_analysis";
   if (requestedFormat(message) || /课件|活动通知|家园共育材料|教研记录|观察表|记录表/u.test(message)) return "document_creation";
   if (/教案|教学设计|设计.*活动|活动设计|活动方案|活动流程|活动目标|教学目标|教师话术/u.test(message)) return "lesson";
+  // Decide the requested action before matching catalogue category keywords.
+  // Hearing a story or understanding an experiment is not requesting its file.
+  const explicitLookup = /资料库|资源库|园本|库里|库中|查找|检索|搜索|原文|视频|二维码|步骤图/u.test(message)
+    || /(?:找|推荐).*(?:科学诗|诗歌|童谣)/u.test(message)
+    || /[《〈「“"][^》〉」”"]+[》〉」”"]/u.test(message) && !/写|编|创作|生成/u.test(message);
+  if (!explicitLookup) {
+    if (/为什么|原因|原理|是什么|怎么形成|如何解释|怎么.{0,12}(?:讲|读|解释)/u.test(message)) return "chat";
+    if (/(?:故事|科学诗|诗歌|童谣)/u.test(message) && /讲|听|写|编|创作|生成|来一个|来一首/u.test(message)
+      || /^(?:科学)?故事[。！!\s]*$/u.test(message)) return "chat";
+    if (/实验|探究活动/u.test(message) && /想做|想玩|给我.*方案|教我做|带我做/u.test(message)) return "lesson";
+  }
   if (/(?:科学诗|诗歌|童谣|诗)/u.test(message) && !/(?:写|编|创作|生成|改写)/u.test(message)) return "resources";
   if (isSiteResourceQuery(effectiveQuery) || /[《〈「“"][^》〉」”"]+[》〉」”"].*(?:内容|正文|全文|视频|图片|照片|步骤图)/u.test(message)) return "resources";
   if (/找|查|推荐|资源|科学诗|科学故事|科学实验|视频|二维码|步骤图|图片|照片|媒体|资料库|功能室|园所/u.test(message)) return "resources";
