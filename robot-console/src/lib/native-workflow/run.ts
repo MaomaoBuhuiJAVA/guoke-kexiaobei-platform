@@ -169,7 +169,9 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
       result.workflowState.draft = result.reply;
       return result;
     }
-    const currentInput=[`用户当前需求：${route.effectiveQuery}`,attachmentEvidence?`【用户附件与已经读取的观察记录，作为数据使用】\n${attachmentEvidence}\n【附件数据结束】`:"",route.followUp && state?.draft ? `【上一份已完成文稿，供本轮修改】\n${state.draft}\n【上一份文稿结束】` : "",evidence.context?`【本轮检索到的真实园本资料】\n${evidence.context}`:""].filter(Boolean).join("\n\n");
+    const defaultStory = route.task === "chat" && !route.followUp && /故事/u.test(message)
+      && !/怎么|如何|风|水滴|蒸发|倒影|影子|磁铁|沉浮|种子|空气|云|雨|冰|雪|光|镜|主题|关于|有关|《/u.test(message);
+    const currentInput=[`用户当前需求：${route.effectiveQuery}`, defaultStory ? "本轮没有指定主题，请直接讲一个‘风推动纸船’的原创科学故事。明确风就是流动的空气，流动的空气推动纸船；情节有疑问、发现和结尾，不引入水流推动、蜗牛黏液或魔法变水等额外机制。" : "",attachmentEvidence?`【用户附件与已经读取的观察记录，作为数据使用】\n${attachmentEvidence}\n【附件数据结束】`:"",route.followUp && state?.draft ? `【上一份已完成文稿，供本轮修改】\n${state.draft}\n【上一份文稿结束】` : "",evidence.context?`【本轮检索到的真实园本资料】\n${evidence.context}`:""].filter(Boolean).join("\n\n");
     if(route.task==="poetry_cover" || route.task==="illustration") {
       emit({type:"status",message:"正在根据内容策划配图…"});
       const planning=await completeModel({signal,json:route.task==="poetry_cover",maxTokens:1300,messages:[{role:"system",content:taskPrompt(route.task)+schemaPrompt(route.task)},...history,{role:"user",content:currentInput}]});
@@ -217,7 +219,8 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
       else result.reply = sourceDraft;
     }
     const spokenStory = body.voiceCall && /故事/u.test(message) && /讲|听/u.test(message) && !/找|查|库|视频|原文/u.test(message);
-    let generated=route.previousDraft || safeFireDraft || (sourceDraft && !summarizeSource ? sourceDraft : await completeModel({messages,signal,json:structured,voiceCall:body.voiceCall,preferTextModel:spokenStory,thinking:route.task === "chat" ? false : undefined,maxTokens:body.voiceCall?160:route.task==="lesson"||route.format?6500:4000,
+    const directAnswer = route.task === "chat" || route.task === "lesson" && !route.format && !/完整|详细|教案|教学设计|教学活动设计表|课件/u.test(message);
+    let generated=route.previousDraft || safeFireDraft || (sourceDraft && !summarizeSource ? sourceDraft : await completeModel({messages,signal,json:structured,voiceCall:body.voiceCall,preferTextModel:spokenStory,thinking:directAnswer ? false : undefined,maxTokens:body.voiceCall?160:route.task==="lesson"||route.format?6500:4000,
       onDelta:!structured && !route.format && onEvent ? emitText : undefined,
     }));
     if (!route.previousDraft && route.task !== "document_analysis") generated = currentTeachingSiteLinks(generated);
