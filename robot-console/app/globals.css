@@ -3419,6 +3419,16 @@ img {
   color: #9aa7a4;
 }
 
+/* Keep editable text at native mobile size without disabling pinch zoom. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .pet-chat .pet-chat__form input,
+  .pet-chat .pet-chat__form textarea,
+  .pet-chat .pet-chat__dialog input,
+  .pet-chat .pet-chat__dialog textarea {
+    font-size: 16px;
+  }
+}
+
 .pet-chat__form button {
   display: grid;
   width: 36px;

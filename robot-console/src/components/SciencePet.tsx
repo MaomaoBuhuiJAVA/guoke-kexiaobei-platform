@@ -663,7 +663,7 @@ export function SciencePet() {
         : null;
       if (prompt) setInput(prompt);
       setOpen(true);
-      window.requestAnimationFrame(() => inputRef.current?.focus());
+      window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
     }
 
     window.addEventListener("kexiaobei:open", openChat);
@@ -1473,7 +1473,7 @@ export function SciencePet() {
       const errors: Record<string, string> = {
         "not-allowed": "麦克风未获授权。微信内请允许录音，并在手机设置中开启微信的麦克风权限。",
         "service-not-allowed": "当前页面不允许录音，请在系统浏览器中打开后重试。",
-        "audio-capture": "我没有找到麦克风，请老师或家长帮忙看看。",
+        "audio-capture": "麦克风没有传来声音，请重新开启通话，并关闭占用麦克风的其他应用。",
         network: "网络有点慢，我再试一次。",
       };
       setVoiceCallError(sessionId, errors[event.error] ?? "语音通话暂时不可用，我们再试一次吧。");
@@ -1652,7 +1652,7 @@ export function SciencePet() {
 
   function focusComposerInput() {
     window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
+      inputRef.current?.focus({ preventScroll: true });
       resizeComposerInput();
     });
   }
@@ -1997,6 +1997,7 @@ export function SciencePet() {
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
+      if (recognitionRef.current !== recognition) return;
       if (!voicePressedRef.current) {
         recognition.stop();
         return;
@@ -2005,6 +2006,7 @@ export function SciencePet() {
       setVoiceNotice("正在聆听，松开后完成输入");
     };
     recognition.onresult = (resultEvent) => {
+      if (recognitionRef.current !== recognition) return;
       let transcript = "";
       for (let index = 0; index < resultEvent.results.length; index += 1) {
         transcript += resultEvent.results[index]?.[0]?.transcript ?? "";
@@ -2017,6 +2019,7 @@ export function SciencePet() {
       }
     };
     recognition.onerror = (errorEvent) => {
+      if (recognitionRef.current !== recognition) return;
       if (errorEvent.error === "aborted" && !voicePressedRef.current) return;
       stopVoiceWaveMeter();
       voiceReleasedRef.current = false;
@@ -2026,7 +2029,7 @@ export function SciencePet() {
       const errorMessages: Record<string, string> = {
         "not-allowed": "麦克风未获授权。微信内请允许录音，并在手机设置中开启微信的麦克风权限。",
         "service-not-allowed": "内置语音识别不可用，已切换兼容录音，请松手后重新按住说话。",
-        "audio-capture": "没有检测到可用的麦克风。",
+        "audio-capture": "麦克风已中断或没有传来声音，请松手后重新按住；如仍无声，请关闭占用麦克风的其他应用。",
         "no-speech": "录音太短或没有听到声音，请按住后再说一次。",
         network: "语音服务暂时无法连接，请稍后重试。",
       };
@@ -2035,6 +2038,7 @@ export function SciencePet() {
       setVoiceNotice(errorMessages[errorEvent.error] ?? "语音识别失败，请重新尝试。");
     };
     recognition.onend = () => {
+      if (recognitionRef.current !== recognition) return;
       const held = voicePressedRef.current;
       const released = voiceReleasedRef.current;
       const cancelled = voiceCancelledRef.current;
@@ -2683,6 +2687,8 @@ export function SciencePet() {
                       <span>
                         {voiceStatus === "processing"
                           ? "正在转写"
+                          : voiceStatus === "starting"
+                            ? "正在连接麦克风"
                           : voiceReleaseAction === "cancel"
                             ? "松手取消"
                             : voiceReleaseAction === "edit"
@@ -2693,6 +2699,8 @@ export function SciencePet() {
                     <p className="pet-voice-hold-overlay__hint">
                       {voiceStatus === "processing"
                         ? "正在整理语音内容"
+                        : voiceStatus === "starting"
+                          ? "连接成功后再说话，松手可结束"
                         : voiceReleaseAction === "cancel"
                           ? "松手取消录音"
                           : voiceReleaseAction === "edit"

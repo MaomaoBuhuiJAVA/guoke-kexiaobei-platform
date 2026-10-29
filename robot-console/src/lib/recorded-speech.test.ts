@@ -5,20 +5,99 @@ afterEach(() => {vi.unstubAllGlobals(); vi.useRealTimers();});
 function recordingEnvironment() {
   let receive: ((event:{inputBuffer:{getChannelData:()=>Float32Array}})=>void) | null = null;
   const stop=vi.fn(), close=vi.fn(async () => {}),disconnect=vi.fn();
+  const track=Object.assign(new EventTarget(),{stop,readyState:"live",enabled:true,muted:false});
+  const stream={getTracks:()=>[track],getAudioTracks:()=>[track]};
+  const contexts: AudioContextMock[]=[];
   const processor={connect:vi.fn(),disconnect,get onaudioprocess(){return receive;},set onaudioprocess(value){receive=value;}};
   class AudioContextMock {
+    constructor(){contexts.push(this);}
     sampleRate=48000; destination={}; state="running";
-    resume=vi.fn(async () => {}); close=close;
+    resume=vi.fn(async () => {this.state="running";}); close=close;
     createMediaStreamSource(){return {connect:vi.fn(),disconnect};}
     createScriptProcessor(){return processor;}
     createGain(){return {gain:{value:1},connect:vi.fn(),disconnect};}
   }
   vi.stubGlobal("window", {AudioContext:AudioContextMock});
-  vi.stubGlobal("navigator",{userAgent:"MicroMessenger",mediaDevices:{getUserMedia:vi.fn(async () => ({getTracks:()=>[{stop}]}))}});
+  vi.stubGlobal("navigator",{userAgent:"MicroMessenger",mediaDevices:{getUserMedia:vi.fn(async () => stream)}});
   const push=(amplitude=0.2)=>receive?.({inputBuffer:{getChannelData:()=>new Float32Array(4800).fill(amplitude)}});
-  return {stop,close,push};
+  return {stop,close,push,track,stream,contexts};
 }
 describe("WeChat compatible microphone input", () => {
+  it("resumes the audio graph again after a permission prompt suspended it", async () => {
+    const env=recordingEnvironment();
+    vi.stubGlobal("navigator",{mediaDevices:{getUserMedia:vi.fn(async()=>{env.contexts[0].state="suspended";return env.stream;})}});
+    const recognition=new RecordedSpeechRecognition(); recognition.start();
+    await vi.waitFor(()=>expect(env.contexts[0].resume).toHaveBeenCalledTimes(2));
+    expect(env.contexts[0].state).toBe("running");
+    recognition.abort();
+  });
+  it("terminates cleanly if the microphone track ends during a held recording", async () => {
+    const env=recordingEnvironment(), error=vi.fn(), ended=vi.fn(), fetcher=vi.fn();
+    vi.stubGlobal("fetch",fetcher);
+    const recognition=new RecordedSpeechRecognition(); recognition.onerror=error;recognition.onend=ended;recognition.start();
+    await vi.waitFor(()=>expect(recognition.recording).toBe(true));
+    env.push(); env.track.readyState="ended";env.track.dispatchEvent(new Event("ended"));
+    expect(error.mock.calls[0]?.[0].error).toBe("audio-capture");
+    expect(ended).toHaveBeenCalledTimes(1);expect(fetcher).not.toHaveBeenCalled();expect(env.stop).toHaveBeenCalled();
+  });
+  it("detects capture stalling after listening and allows a fresh attempt", async () => {
+    vi.useFakeTimers();
+    const env=recordingEnvironment(), error=vi.fn();
+    const recognition=new RecordedSpeechRecognition(); recognition.onerror=error;recognition.start();
+    await vi.advanceTimersByTimeAsync(1);env.push();
+    await vi.advanceTimersByTimeAsync(3001);
+    expect(error.mock.calls[0]?.[0].error).toBe("audio-capture");
+    recognition.start();await vi.advanceTimersByTimeAsync(1);
+    expect(env.contexts).toHaveLength(2);expect(recognition.recording).toBe(true);recognition.abort();
+  });
+  it("supports two consecutive recordings without stale frames or results", async () => {
+    const env=recordingEnvironment(), result=vi.fn();
+    vi.stubGlobal("fetch",vi.fn(async()=>Response.json({text:"连续录音"})));
+    const recognition=new RecordedSpeechRecognition();recognition.onresult=result;
+    for(let round=1;round<=2;round++){
+      recognition.start();await vi.waitFor(()=>expect(recognition.recording).toBe(true));
+      env.push();env.push();env.push();recognition.stop();
+      await vi.waitFor(()=>expect(result).toHaveBeenCalledTimes(round));
+    }
+    expect(env.contexts).toHaveLength(2);
+  });
+  it("selects a single recording stream on iPhone Edge instead of native recognition plus a second meter", () => {
+    recordingEnvironment();
+    class Native {}
+    (window as unknown as {SpeechRecognition: typeof Native}).SpeechRecognition = Native;
+    vi.stubGlobal("navigator", {userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 EdgiOS/140.0", mediaDevices: {getUserMedia: vi.fn()}});
+    expect(compatibleSpeechRecognitionConstructor("hold")?.prototype).toBeInstanceOf(RecordedSpeechRecognition);
+  });
+  it("does not announce listening before the first actual microphone frame", async () => {
+    const env = recordingEnvironment();
+    const recognition = new RecordedSpeechRecognition();
+    const started = vi.fn(); recognition.onstart = started;
+    recognition.start();
+    await vi.waitFor(() => expect(recognition.recording).toBe(true));
+    expect(started).not.toHaveBeenCalled();
+    env.push();
+    expect(started).toHaveBeenCalledTimes(1);
+    recognition.abort();
+  });
+  it("fails and frees the microphone when an allowed stream delivers no frames", async () => {
+    vi.useFakeTimers();
+    const env = recordingEnvironment(), error = vi.fn(), ended = vi.fn();
+    const recognition = new RecordedSpeechRecognition();
+    recognition.onerror = error; recognition.onend = ended; recognition.start();
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(error.mock.calls[0]?.[0].error).toBe("audio-capture");
+    expect(ended).toHaveBeenCalledTimes(1);
+    expect(env.stop).toHaveBeenCalled();
+  });
+  it("accepts quiet but audible speech instead of discarding it as silence", async () => {
+    const env=recordingEnvironment(), fetcher=vi.fn(async () => Response.json({text: "小声提问也能识别"}));
+    vi.stubGlobal("fetch", fetcher);
+    const recognition=new RecordedSpeechRecognition(), result=vi.fn(); recognition.onresult=result; recognition.start();
+    await vi.waitFor(() => expect(recognition.recording).toBe(true));
+    env.push(0.007); env.push(0.007); env.push(0.007); recognition.stop();
+    await vi.waitFor(() => expect(result).toHaveBeenCalledTimes(1));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it("selects recording for WeChat even when a blocked native recognition constructor exists", () => {
     recordingEnvironment();
     class Native {}

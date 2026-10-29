@@ -21,6 +21,7 @@ type Capture={
   processor?:ScriptProcessorNode;gain?:GainNode;frames:Float32Array[];
   cancelled:boolean;stopping:boolean;recording:boolean;spokenFrames:number;started:number;lastSpeech:number;
   timer?:ReturnType<typeof setTimeout>;
+  watch?:ReturnType<typeof setInterval>;lastFrame:number;ready:boolean;cleanups:Array<()=>void>;
 };
 
 /** Downsample PCM to a deterministic, uncompressed format supported by the provider, including on iOS. */
@@ -60,7 +61,7 @@ export class RecordedSpeechRecognition implements SpeechRecognitionLike {
     // Create/resume in the button gesture, before waiting for the permission prompt on iOS.
     const context=new Context();
     void context.resume().catch(()=>{});
-    const capture:Capture={controller:new AbortController(),context,frames:[],cancelled:false,stopping:false,recording:false,spokenFrames:0,started:Date.now(),lastSpeech:0};
+    const capture:Capture={controller:new AbortController(),context,frames:[],cancelled:false,stopping:false,recording:false,spokenFrames:0,started:Date.now(),lastSpeech:0,lastFrame:Date.now(),ready:false,cleanups:[]};
     this.capture=capture;
     capture.timer=setTimeout(()=>this.fail(capture,"not-allowed"),15000);
     void this.open(capture);
@@ -72,34 +73,56 @@ export class RecordedSpeechRecognition implements SpeechRecognitionLike {
       capture.stream=stream;
       if(capture.stopping){this.fail(capture,"no-speech");return;}
       clearTimeout(capture.timer);
+      capture.timer=setTimeout(()=>this.fail(capture,"audio-capture"),3000);
+      const tracks=stream.getAudioTracks?.() ?? stream.getTracks();
+      if(!tracks.length || tracks.some(track=>track.readyState==="ended" || track.enabled===false)){this.fail(capture,"audio-capture");return;}
+      for(const track of tracks){
+        const ended=()=>this.fail(capture,"audio-capture");
+        track.addEventListener?.("ended",ended);
+        capture.cleanups.push(()=>track.removeEventListener?.("ended",ended));
+      }
       capture.source=capture.context.createMediaStreamSource(stream);
       capture.processor=capture.context.createScriptProcessor(4096,1,1);
       capture.gain=capture.context.createGain();capture.gain.gain.value=0;
       capture.source.connect(capture.processor);capture.processor.connect(capture.gain);capture.gain.connect(capture.context.destination);
-      capture.started=Date.now();capture.recording=true;
+      capture.started=Date.now();capture.lastFrame=Date.now();capture.recording=true;
       capture.processor.onaudioprocess=event=>{
         if(this.capture!==capture || !capture.recording)return;
         const frame=new Float32Array(event.inputBuffer.getChannelData(0));
+        if(!frame.length)return;
+        capture.lastFrame=Date.now();
         capture.frames.push(frame);
         const rms=Math.sqrt(frame.reduce((sum,value)=>sum+value*value,0)/frame.length);
         this.onlevel?.(Math.min(1,rms*8));
-        if(rms>=0.012){capture.spokenFrames++;capture.lastSpeech=Date.now();}
+        if(rms>=0.006){capture.spokenFrames++;capture.lastSpeech=Date.now();}
+        if(!capture.ready){
+          capture.ready=true;clearTimeout(capture.timer);
+          capture.timer=setTimeout(()=>{
+            if(this.mode==="call" && capture.spokenFrames<3){this.fail(capture,"no-speech");return;}
+            if(this.mode==="call")capture.timer=setTimeout(()=>this.stop(),17000);
+            else this.stop();
+          },this.mode==="call"?8000:25000);
+          this.onstart?.();
+          if(this.capture!==capture || !capture.recording)return;
+        }
         if(this.mode==="call" && capture.spokenFrames>=3 && Date.now()-capture.lastSpeech>=1100)this.stop();
         else if(capture.frames.reduce((sum,part)=>sum+part.length,0)>=capture.context.sampleRate*25)this.stop();
       };
-      capture.timer=setTimeout(()=>{
-        if(this.mode==="call" && capture.spokenFrames<3){this.fail(capture,"no-speech");return;}
-        if(this.mode==="call")capture.timer=setTimeout(()=>this.stop(),17000);
-        else this.stop();
-      },this.mode==="call"?8000:25000);
-      this.onstart?.();
+      // Permission alone does not prove that the microphone graph is producing audio.
+      capture.watch=setInterval(()=>{
+        if(this.capture!==capture || !capture.recording)return;
+        if(Date.now()-capture.lastFrame>2500 || tracks.some(track=>track.readyState==="ended" || track.enabled===false)){this.fail(capture,"audio-capture");return;}
+        if(capture.context.state!=="running")void capture.context.resume().catch(()=>this.fail(capture,"audio-capture"));
+      },500);
+      await capture.context.resume();
     }catch(error){
       const name=error instanceof Error?error.name:"";
       this.fail(capture,name==="NotAllowedError"||name==="SecurityError"?"not-allowed":"audio-capture");
     }
   }
   private release(capture:Capture){
-    capture.recording=false;clearTimeout(capture.timer);
+    capture.recording=false;clearTimeout(capture.timer);clearInterval(capture.watch);
+    capture.cleanups.forEach(cleanup=>cleanup());capture.cleanups=[];
     if(capture.processor)capture.processor.onaudioprocess=null;
     capture.source?.disconnect();capture.processor?.disconnect();capture.gain?.disconnect();
     capture.stream?.getTracks().forEach(track=>track.stop());capture.stream=undefined;
@@ -156,7 +179,8 @@ export function compatibleSpeechRecognitionConstructor(mode:Mode="hold"):SpeechR
   const w=window as typeof window & {SpeechRecognition?:SpeechRecognitionConstructor;webkitSpeechRecognition?:SpeechRecognitionConstructor;webkitAudioContext?:typeof AudioContext};
   const Native=w.SpeechRecognition || w.webkitSpeechRecognition;
   const canRecord=Boolean((w.AudioContext || w.webkitAudioContext) && navigator.mediaDevices?.getUserMedia);
-  if(canRecord && (/MicroMessenger/iu.test(navigator.userAgent) || !Native || nativeServiceBlocked)){
+  const iOS=/iPhone|iPad|iPod/iu.test(navigator.userAgent) || navigator.platform==="MacIntel" && navigator.maxTouchPoints>1;
+  if(canRecord && (/MicroMessenger/iu.test(navigator.userAgent) || iOS || !Native || nativeServiceBlocked)){
     return class extends RecordedSpeechRecognition {constructor(){super(mode);}};
   }
   return nativeServiceBlocked ? undefined : Native;
