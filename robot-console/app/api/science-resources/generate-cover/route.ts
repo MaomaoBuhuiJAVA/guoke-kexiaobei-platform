@@ -1,3 +1,4 @@
+import {authorizeScienceWrite} from "@/lib/science-write-access";
 import { NextResponse } from "next/server";
 import { checkPublicRateLimit } from "@/lib/public-rate-limit";
 import { persistScienceCoverImage, persistScienceCoverUrl, persistSciencePoetryCoverUrl } from "@/lib/science-cover-sync";
@@ -13,6 +14,8 @@ function fallbackCover(category: string) {
 }
 
 export async function POST(request: Request) {
+  const denied = await authorizeScienceWrite(request, "generate-cover", 6);
+  if (denied) return denied;
   const limited = checkPublicRateLimit(request, "science-cover", 6);
   if (limited) return limited;
   let body: {

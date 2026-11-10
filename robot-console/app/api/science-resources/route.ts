@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { persistOssUpload } from "@/lib/oss-upload";
+import {persistOssUpload, readUploadForm, validateOssUpload, discardScienceUpload, OssUploadValidationError} from "@/lib/oss-upload";
+import {authorizeScienceWrite} from "@/lib/science-write-access";
+import {publicScienceItem} from "@/lib/science-privacy";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -41,15 +43,6 @@ function persistenceFailureResponse(error: unknown, fallbackMessage: string) {
 
 function isFile(value: FormDataEntryValue | null): value is File {
   return Boolean(value && typeof value === "object" && "arrayBuffer" in value && "size" in value);
-}
-
-async function saveInlineUpload(file: File, folder: string) {
-  if (!isFile(file) || file.size <= 0 || file.size > MAX_INLINE_UPLOAD_BYTES) return null;
-  try {
-    return await persistOssUpload(file, {folder: `science-resources/${folder}`, maxBytes: MAX_INLINE_UPLOAD_BYTES});
-  } catch {
-    return null;
-  }
 }
 
 function serializeCreatedItem(
@@ -201,14 +194,20 @@ function resourceRows(
 }
 
 export async function POST(request: Request) {
+  const denied = await authorizeScienceWrite(request, "create", 10);
+  if (denied) return denied;
+  const files: Array<{file: File; folder: string; field: string}> = [];
+  const storedKeys: string[] = [];
+  const cleanup = async () => {
+    const results = await Promise.allSettled(storedKeys.map(discardScienceUpload));
+    if (results.some(result => result.status === "rejected")) console.error("Science upload rollback incomplete; private orphan objects need review");
+  };
   let input: Record<string, unknown>;
-  let uploadedVideo: { url: string } | null = null;
-  let uploadedDocument: { url: string } | null = null;
   let uploadedVideoFileName = "";
   let uploadedDocumentFileName = "";
   try {
     if (request.headers.get("content-type")?.toLowerCase().includes("multipart/form-data")) {
-      const form = await request.formData();
+      const form = await readUploadForm(request, 3 * MAX_INLINE_UPLOAD_BYTES + 512 * 1024);
       const value = (key: string) => {
         const field = form.get(key);
         return typeof field === "string" ? field.trim() : "";
@@ -238,37 +237,37 @@ export async function POST(request: Request) {
       };
       if (isStory && isFile(video)) {
         uploadedVideoFileName = video.name;
-        uploadedVideo = await saveInlineUpload(video, "stories");
-        if (!uploadedVideo) return NextResponse.json({ error: "视频暂时无法保存，请稍后重试" }, { status: 503 });
-        input.videoUrl = uploadedVideo.url;
+        files.push({file: video, folder: "stories", field: "videoUrl"});
       }
       if (!isStory && isFile(poemFile)) {
         uploadedDocumentFileName = poemFile.name;
-        uploadedDocument = await saveInlineUpload(poemFile, "poems");
-        if (!uploadedDocument) return NextResponse.json({ error: "附件暂时无法保存，请稍后重试" }, { status: 503 });
-        input.documentUrl = uploadedDocument.url;
-        input.documentName = poemFile.name;
+        files.push({file: poemFile, folder: "poems", field: "documentUrl"});
       }
-      if (isFile(supportingFile)) {
-        if (supportingFile.size <= 0 || supportingFile.size > MAX_INLINE_UPLOAD_BYTES) {
-          return NextResponse.json({ error: "补充材料不能为空且不能超过 5MB，请使用直传上传" }, { status: 400 });
-        }
-        const savedSupporting = await saveInlineUpload(supportingFile, "supporting");
-        if (!savedSupporting) return NextResponse.json({ error: "补充材料暂时无法保存，请稍后重试" }, { status: 503 });
-        input.supportingUrl = savedSupporting.url;
-        input.supportingName = supportingFile.name;
-      }
+      if (isFile(supportingFile)) files.push({file: supportingFile, folder: "supporting", field: "supportingUrl"});
+      for (const {file} of files) validateOssUpload(file, MAX_INLINE_UPLOAD_BYTES);
     } else {
-      const body = await request.json();
+      if (Number(request.headers.get("content-length")) > 512 * 1024) throw new OssUploadValidationError("提交内容过长", 413);
+      const reader = request.body?.getReader();
+      const chunks: Uint8Array[] = []; let size = 0;
+      if (reader) try {
+        for (;;) {
+          const {done, value} = await reader.read(); if (done) break;
+          size += value.byteLength;
+          if (size > 512 * 1024) {await reader.cancel(); throw new OssUploadValidationError("提交内容过长", 413);}
+          chunks.push(value);
+        }
+      } finally {reader.releaseLock();}
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       input = body && typeof body === "object" && !Array.isArray(body)
         ? body as Record<string, unknown>
         : {};
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof OssUploadValidationError) return NextResponse.json({error: error.message}, {status: error.status});
     return NextResponse.json({ error: "请求格式无效" }, { status: 400 });
   }
 
-  const validation = validateScienceResourceSubmit(input);
+  const validation = validateScienceResourceSubmit(input, {uploadedVideo: files.some(file => file.field === "videoUrl")});
   if (!validation.ok) return NextResponse.json({ error: validation.error }, { status: 400 });
 
   const ids = createScienceResourceIds(validation.value.category === "科学诗" ? "POEM" : "STORY");
@@ -276,6 +275,16 @@ export async function POST(request: Request) {
     uploadedVideoFileName || uploadedDocumentFileName ||
     `用户提交/${validation.value.category}/${validation.value.title}`;
   const resourceInput = { ...validation.value, sourceFile };
+  try {
+    for (const {file, folder, field} of files) {
+      const uploaded = await persistOssUpload(file, {folder: `science-resources/${folder}`, maxBytes: MAX_INLINE_UPLOAD_BYTES});
+      storedKeys.push(uploaded.key);
+      Object.assign(resourceInput, {[field]: uploaded.url});
+    }
+  } catch (error) {
+    await cleanup();
+    return NextResponse.json({error: error instanceof OssUploadValidationError ? error.message : "附件暂时无法保存，请稍后重试"}, {status: error instanceof OssUploadValidationError ? error.status : 503});
+  }
   const rows = resourceRows(resourceInput, ids);
   try {
     const created = await prisma.$transaction(async (tx) => {
@@ -297,7 +306,7 @@ export async function POST(request: Request) {
           duplicateOf: "",
           knowledgeFile: sourceFile,
           imageCount: rows.filter((row) => row.resourceType === "图片资源").length,
-          videoUrl: validation.value.videoUrl,
+          videoUrl: resourceInput.videoUrl,
           excerpt: validation.value.excerpt,
           body: validation.value.body,
           sortOrder: 0,
@@ -318,8 +327,9 @@ export async function POST(request: Request) {
       }));
       return { ...item, resources };
     });
-    return NextResponse.json({ item: serializeCreatedItem(created) }, { status: 201 });
+    return NextResponse.json({ item: publicScienceItem(serializeCreatedItem(created)) }, { status: 201 });
   } catch (error) {
+    await cleanup();
     return persistenceFailureResponse(error, "资料暂时无法保存，请稍后重试");
   }
 }

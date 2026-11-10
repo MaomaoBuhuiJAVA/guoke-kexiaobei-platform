@@ -1,3 +1,4 @@
+vi.mock("@/lib/science-write-access", () => ({authorizeScienceWrite: vi.fn().mockResolvedValue(null)}));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/science-cover-sync", () => ({

@@ -59,6 +59,7 @@ export function createScienceResourceIds(prefix: "POEM" | "STORY") {
 
 export function validateScienceResourceSubmit(
   input: Record<string, unknown>,
+  options: {uploadedVideo?: boolean} = {},
 ): ScienceSubmitValidation {
   const category = text(input.category, 20);
   const title = text(input.title, 120);
@@ -84,7 +85,7 @@ export function validateScienceResourceSubmit(
   }
   if (!topic) return { ok: false, error: "请填写主题" };
   if (!body && category === "科学诗") return { ok: false, error: "科学诗正文不能为空" };
-  if (!videoUrl && category === "科学故事") {
+  if (!videoUrl && category === "科学故事" && !options.uploadedVideo) {
     return { ok: false, error: "科学故事需要提供视频地址或上传视频" };
   }
   if (input.videoUrl && !videoUrl) return { ok: false, error: "视频地址必须是 HTTPS 地址" };

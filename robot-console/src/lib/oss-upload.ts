@@ -40,6 +40,19 @@ function uploadMime(file: File): string {
   throw new OssUploadValidationError("文件类型不支持或与扩展名不一致");
 }
 
+/** Validate every file before the first object-store side effect. */
+export function validateOssUpload(file: File, maxBytes: number): void {
+  if (!file.name.trim() || !file.size) throw new OssUploadValidationError("请选择有效文件");
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || file.size > maxBytes) throw new OssUploadValidationError("文件超过大小限制", 413);
+  uploadMime(file);
+}
+
+/** Only newly created keys returned by this request may be rolled back. */
+export async function discardScienceUpload(key: string): Promise<void> {
+  if (!/^uploads\/science-resources\/(poems|stories|supporting|covers|videos)\/[a-f0-9-]{36}-[^/]+$/u.test(key)) throw new Error("Invalid upload rollback key");
+  await createOssClient().delete(key);
+}
+
 /** Private objects become readable only when a database record grants access. */
 export async function persistOssUpload(file: File, {folder, maxBytes}: {folder: string; maxBytes: number}): Promise<{url: string; key: string}> {
   if (!/^(?:science-resources\/(?:poems|stories|supporting|covers|videos)|science-resource-covers|student-works\/[a-zA-Z0-9_-]{1,160})$/u.test(folder)) throw new OssUploadValidationError("文件保存路径无效");

@@ -1,3 +1,4 @@
+import {authorizeScienceWrite} from "@/lib/science-write-access";
 import { NextResponse } from "next/server";
 import { checkPublicRateLimit } from "@/lib/public-rate-limit";
 import { persistOssUpload, readUploadForm, OssUploadValidationError } from "@/lib/oss-upload";
@@ -8,6 +9,8 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const folders = new Set(["poems", "stories", "supporting", "covers"]);
 
 export async function POST(request: Request) {
+  const denied = await authorizeScienceWrite(request, "upload", 20);
+  if (denied) return denied;
   const limited = checkPublicRateLimit(request, "science-material-upload", 20);
   if (limited) return limited;
   let form: FormData;

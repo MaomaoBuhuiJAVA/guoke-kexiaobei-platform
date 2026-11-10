@@ -1,3 +1,5 @@
+import {readUploadForm, OssUploadValidationError} from "@/lib/oss-upload";
+import {authorizeScienceWrite} from "@/lib/science-write-access";
 import { NextResponse } from "next/server";
 import { extractAttachment, type ExtractedAttachment } from "@/lib/native-workflow/attachments";
 import { completeModel, ModelUnavailableError, type ModelMessage } from "@/lib/native-workflow/model";
@@ -45,12 +47,15 @@ function fieldsFromResult(value: Record<string, unknown> | null) {
 }
 
 export async function POST(request: Request) {
+  const denied = await authorizeScienceWrite(request, "recognize", 10);
+  if (denied) return denied;
   const limited = checkPublicRateLimit(request, "science-recognize", 10);
   if (limited) return limited;
   let form: FormData;
   try {
-    form = await request.formData();
-  } catch {
+    form = await readUploadForm(request, MAX_FILE_BYTES + 64 * 1024);
+  } catch (error) {
+    if (error instanceof OssUploadValidationError) return NextResponse.json({error: error.message}, {status: error.status});
     return NextResponse.json({ error: "上传格式无效" }, { status: 400 });
   }
   const file = form.get("file");

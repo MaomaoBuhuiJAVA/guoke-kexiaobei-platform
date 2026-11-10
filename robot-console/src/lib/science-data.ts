@@ -1,3 +1,4 @@
+import {publicScienceItem} from "./science-privacy";
 import fallbackPayload from "@/data/science-knowledge.json";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -547,9 +548,10 @@ async function getScienceKnowledgeItemInternal(id: string): Promise<ScienceKnowl
 }
 
 export async function getScienceKnowledgeSummaries(): Promise<ScienceKnowledgeSummary[]> {
-  return resolveMediaReferences(await getScienceKnowledgeSummariesInternal());
+  return resolveMediaReferences((await getScienceKnowledgeSummariesInternal()).map(item => publicScienceItem(item)));
 }
 
 export async function getScienceKnowledgeItem(id: string): Promise<ScienceKnowledgeItem | null> {
-  return resolveMediaReferences(await getScienceKnowledgeItemInternal(id));
+  const item = await getScienceKnowledgeItemInternal(id);
+  return resolveMediaReferences(item ? publicScienceItem(item) : null);
 }

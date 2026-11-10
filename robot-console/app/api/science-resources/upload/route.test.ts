@@ -1,3 +1,4 @@
+vi.mock("@/lib/science-write-access", () => ({authorizeScienceWrite: vi.fn().mockResolvedValue(null)}));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const driver = vi.hoisted(() => ({put: vi.fn()}));
 vi.mock("ali-oss", () => ({default: class {put = driver.put;}}));

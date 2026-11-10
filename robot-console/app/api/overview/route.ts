@@ -4,5 +4,5 @@ import { getSiteData } from "@/lib/site-data";
 
 export async function GET() {
   const user = await getSessionUser();
-  return NextResponse.json(await getSiteData(user?.role));
+  return NextResponse.json(await getSiteData(user?.role), {headers: {"Cache-Control": "private, no-store"}});
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import {canManageScience} from "@/lib/science-access";
 import Link from "next/link";
 import { uploadScienceMaterial } from "@/lib/science-upload-client";
 import { AnimatePresence, motion } from "motion/react";
@@ -1600,7 +1601,7 @@ export function ScienceLab({
             </div>
             <div className="results-heading__context">
               <span>{selection.category || "全部"} / {selection.ageLabel || "全部"}</span>
-              {selection.category === "科学诗" || selection.category === "科学故事" ? (
+              {canManageScience(initialUser) && (selection.category === "科学诗" || selection.category === "科学故事") ? (
                 <button
                   type="button"
                   className="science-material-add"

@@ -1,3 +1,4 @@
+vi.mock("@/lib/science-write-access", () => ({authorizeScienceWrite: vi.fn().mockResolvedValue(null)}));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { POST } from "./route";
