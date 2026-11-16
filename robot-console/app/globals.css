@@ -3276,6 +3276,7 @@ img {
 
 .pet-call__bubble p {
   margin: 0;
+  white-space: pre-wrap;
 }
 
 .pet-call__error {

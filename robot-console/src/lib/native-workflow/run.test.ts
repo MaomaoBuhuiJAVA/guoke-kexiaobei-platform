@@ -12,6 +12,20 @@ import { readTeachingArtifact } from "./artifacts";
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 function textModel(content:string) {return Response.json({choices:[{message:{content}}]});}
 describe("native teaching workflow",()=>{
+  it("delivers a complete spoken story with enough model budget and no contradictory short-answer instruction", async () => {
+    vi.stubEnv("QWEN_TTS_API_KEY", "text-key");
+    const story = "原创科学故事。" + "小纸船停在水面上，小朋友扇动纸板，流动的空气推动小船。".repeat(10) + "它终于到岸了，原来风就是流动的空气。";
+    const fetcher = vi.fn<typeof fetch>(async () => textModel(story));
+    vi.stubGlobal("fetch", fetcher);
+    const result = await runTeachingWorkflow({message: "讲一个科学故事", voiceCall: true}, {catalog: []});
+    expect(result.reply).toBe(story);
+    const sent = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    expect(sent.max_tokens).toBeGreaterThanOrEqual(1200);
+    expect(sent.messages[0].content).not.toMatch(/最多两句|72/u);
+    expect(sent.messages[0].content).toContain("完整");
+    expect(sent.enable_thinking).toBe(false);
+  });
+
   it("bounds voice history and excludes a previous document draft from a short call", async () => {
     vi.stubEnv("QWEN_TTS_API_KEY", "text-key");
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(textModel("小水滴聚在一起变重，就会落下来啦。"));

@@ -44,7 +44,7 @@ import type { AgentResult } from "@/lib/agent-result";
 import { assistantDisplayText, assistantFallbackText, hasVisibleAssistantText } from "@/lib/assistant-display-text";
 import { createWebUserId } from "@/lib/chat-session";
 import { clearChatHistory, readChatHistory, writeChatHistory, type StoredChatMessage } from "@/lib/chat-history";
-import { normalizeVoiceCallReply, voiceCallSpeechText } from "@/lib/voice-call";
+import { normalizeVoiceCallReply, voiceCallSpeechText, voiceReplyMode } from "@/lib/voice-call";
 import { createVoiceSpeechQueue } from "@/lib/voice-speech";
 import { createVoiceTranscriptBuffer } from "@/lib/voice-transcript";
 import { compatibleSpeechRecognitionConstructor, markNativeSpeechUnavailable } from "@/lib/recorded-speech";
@@ -438,6 +438,7 @@ export function SciencePet() {
   const [callSpeechUnavailable, setCallSpeechUnavailable] = useState(false);
   const [callTranscript, setCallTranscript] = useState("");
   const [callReply, setCallReply] = useState("");
+  const [callReplyMessageId, setCallReplyMessageId] = useState<number | null>(null);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [autoWalk, setAutoWalk] = useState<WalkDirection | null>(null);
@@ -933,6 +934,7 @@ export function SciencePet() {
       setCallNotice("");
       setCallTranscript("");
       setCallReply("");
+      setCallReplyMessageId(null);
       setCopiedMessageId(null);
       setBusy(false);
     },
@@ -1051,7 +1053,7 @@ export function SciencePet() {
     }
     return {
       text: voiceCall
-        ? normalizeVoiceCallReply(data.reply?.trim() || assistantFallbackText(data.agentResult?.kind) || "资料库暂时没有返回内容，请换个问法试试。")
+        ? normalizeVoiceCallReply(data.reply?.trim() || assistantFallbackText(data.agentResult?.kind) || "资料库暂时没有返回内容，请换个问法试试。", voiceReplyMode(content, history))
         : data.reply?.trim() || assistantFallbackText(data.agentResult?.kind) || "资料库暂时没有返回内容，请换个问法试试。",
       provider: data.provider,
       responseId: data.responseId,
@@ -1312,6 +1314,8 @@ export function SciencePet() {
       role: message.role,
       content: message.text.slice(-800),
     }));
+    const replyMode = voiceReplyMode(transcript, history);
+    setCallReplyMessageId(assistantMessageId);
     callAssistantMessageRef.current = assistantMessageId;
     setMessages((current) => [
       ...current,
@@ -1323,6 +1327,7 @@ export function SciencePet() {
     let streamedText = "";
     const speech = createVoiceSpeechQueue({
       signal: thinking.abortController.signal,
+      mode: replyMode,
       prepare: async (text, signal) => {
         const response = await fetch("/api/voice/tts", {
           method: "POST", signal,
@@ -1367,7 +1372,7 @@ export function SciencePet() {
           if (!isCurrentVoiceCall(sessionId)) return;
           applyAssistantStreamEvent(assistantMessageId, event, (text, mode) => {
             streamedText = mode === "delta" ? streamedText + text : text;
-            const visible = voiceCallSpeechText(streamedText);
+            const visible = voiceCallSpeechText(streamedText, replyMode);
             setCallReply(visible);
             updatePetMessage(assistantMessageId, message => ({...message, text: visible, pending: !visible}));
           });
@@ -1379,7 +1384,7 @@ export function SciencePet() {
       );
       if (!isCurrentVoiceCall(sessionId)) return;
 
-      const callText = normalizeVoiceCallReply(reply.text);
+      const callText = normalizeVoiceCallReply(reply.text, replyMode);
       setCallReply(callText);
       updatePetMessage(assistantMessageId, (message) => ({
         ...message,
@@ -1546,6 +1551,7 @@ export function SciencePet() {
     setCallSpeechUnavailable(false);
     setCallTranscript("");
     setCallReply("");
+    setCallReplyMessageId(null);
     startCallRecognition(session.id);
   }
 
@@ -1597,6 +1603,7 @@ export function SciencePet() {
     setBusy(false);
     setCallTranscript("");
     setCallReply("");
+    setCallReplyMessageId(null);
     setCallPhase("listening");
     setCallNotice("好啦，你说，我在听。");
     startCallRecognition(session.id);
@@ -2318,6 +2325,7 @@ export function SciencePet() {
   }
 
   const callInputLocked = callPhase !== "idle" && callPhase !== "error";
+  const callResourceLinks = messages.find(message => message.id === callReplyMessageId)?.labLinks;
 
   return (
     <div
@@ -2417,6 +2425,15 @@ export function SciencePet() {
                     <div className="pet-call__bubble pet-call__bubble--assistant">
                       <span className="pet-call__who">科小贝</span>
                       <p>{callReply}</p>
+                      {callResourceLinks?.length ? (
+                        <div className="pet-message__lab-links" aria-label="本轮相关资源">
+                          {callResourceLinks.map(link => (
+                            <Link className="pet-message__lab-link" href={link.href} key={link.id} onClick={endVoiceCall}>
+                              查看《{link.title}》
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                   {callSpeechUnavailable ? (

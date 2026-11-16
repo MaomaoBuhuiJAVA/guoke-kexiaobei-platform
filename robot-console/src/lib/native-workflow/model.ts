@@ -1,4 +1,5 @@
 import { qwenApiKey, qwenChatEndpoint } from "@/lib/qwen-config";
+import type { VoiceReplyMode } from "@/lib/voice-call";
 
 export type ModelMessage = {role: "system" | "user" | "assistant"; content: string | Array<{type: "text"; text: string} | {type: "image_url"; image_url: {url: string}}>};
 export class ModelUnavailableError extends Error {
@@ -20,16 +21,17 @@ export function modelConfig(vision = false, voiceCall = false) {
   };
 }
 
-export async function completeModel({messages, vision = false, voiceCall = false, json = false, thinking, preferTextModel = false, signal, onDelta, maxTokens, fetchImpl = fetch}: {
+export async function completeModel({messages, vision = false, voiceCall = false, voiceMode = "brief", json = false, thinking, preferTextModel = false, signal, onDelta, maxTokens, fetchImpl = fetch}: {
   messages: ModelMessage[]; vision?: boolean; voiceCall?: boolean; json?: boolean;
   signal?: AbortSignal; onDelta?: (text: string) => void; maxTokens?: number; fetchImpl?: typeof fetch;
   thinking?: boolean;
+  voiceMode?: VoiceReplyMode;
   preferTextModel?: boolean;
 }): Promise<string> {
   const config = modelConfig(vision, voiceCall && !preferTextModel);
   if (!config.key) throw new ModelUnavailableError();
   const controller = new AbortController();
-  const timeoutMs = voiceCall ? 12_000 : vision ? 40_000 : 75_000;
+  const timeoutMs = voiceCall ? voiceMode === "content" ? 45_000 : 12_000 : vision ? 40_000 : 75_000;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const cancel = () => controller.abort();
   if (signal?.aborted) controller.abort(); else signal?.addEventListener("abort", cancel, {once:true});

@@ -7,6 +7,24 @@ function deferred<T>() {
   return {promise, resolve};
 }
 
+it("speaks the whole streamed story in content mode, including its ending after 72 characters", async () => {
+  const spoken: string[] = [];
+  const reply = "小纸船停在水面上。" + "小朋友扇动纸板，空气流动起来，推动小纸船慢慢向前。".repeat(12) + "它终于到了岸边，原来风就是流动的空气。";
+  const queue = createVoiceSpeechQueue({mode: "content", prepare: async text => text, play: async text => {spoken.push(text);return true;}});
+  for (let index = 0; index < reply.length; index += 9) queue.push(reply.slice(index, index + 9));
+  expect(await queue.finish(reply)).toBe(true);
+  expect(spoken.join("")).toBe(reply);
+});
+
+it("preserves the poem lines across streamed audio segments", async () => {
+  const spoken: string[] = [];
+  const poem = "《风》\n风吹树叶轻轻摇，\n小小纸船向前跑。\n\n流动空气就是风，\n新的发现记心中。";
+  const queue = createVoiceSpeechQueue({mode: "content", prepare: async text => text, play: async text => {spoken.push(text);return true;}});
+  for (const part of [poem.slice(0, 23), poem.slice(23)]) queue.push(part);
+  expect(await queue.finish(poem)).toBe(true);
+  expect(spoken.join("")).toBe(poem);
+});
+
 it("prepares a complete first sentence before the chat response has finished", async () => {
   const prepared: string[] = [], spoken: string[] = [];
   const firstPlayback = deferred<boolean>();

@@ -4,9 +4,28 @@ import {
   VOICE_CALL_EMPTY_REPLY,
   VOICE_CALL_PROMPT,
   VOICE_CALL_SERVICE_ERROR,
+  voiceReplyMode,
 } from "./voice-call";
 
 describe("voice call replies", () => {
+  it("preserves a complete story and the original wording of a poem in content mode", () => {
+    const story = "纸船停在水面上，小朋友轻轻扇动纸板，空气流动起来。".repeat(12) + "纸船向前走了，原来风就是流动的空气。";
+    expect(normalizeVoiceCallReply(story, "content")).toBe(story);
+    expect(normalizeVoiceCallReply("《小实验》\n实验材料排排站，\n观察并记录新发现。", "content"))
+      .toBe("《小实验》\n实验材料排排站，\n观察并记录新发现。");
+  });
+
+  it("uses longer delivery for content requests and their follow-ups without lengthening a new factual question", () => {
+    expect(voiceReplyMode("讲一个科学故事")).toBe("content");
+    expect(voiceReplyMode("推荐一首关于风的科学诗")).toBe("content");
+    expect(voiceReplyMode("请朗读《风》")).toBe("content");
+    const history = [{role: "user", content: "讲个故事"}, {role: "assistant", content: "纸船遇见了风。"}];
+    expect(voiceReplyMode("再讲一个", history)).toBe("content");
+    expect(voiceReplyMode("再长一点", history)).toBe("content");
+    expect(voiceReplyMode("再讲一个", [...history, {role: "user", content: "再讲一个"}, {role: "assistant", content: "小纸船到了岸边。"}])).toBe("content");
+    expect(voiceReplyMode("为什么会下雨？", history)).toBe("brief");
+  });
+
   it("keeps a normal short reply unchanged", () => {
     expect(normalizeVoiceCallReply("可以试试影子剧场。把手电筒和小玩偶准备好。"))
       .toBe("可以试试影子剧场。把手电筒和小玩偶准备好。");

@@ -1,5 +1,5 @@
 import snapshot from "@/data/teaching-workflow.json";
-import { VOICE_CALL_PROMPT } from "@/lib/voice-call";
+import { VOICE_CALL_PROMPT, voiceCallPrompt, type VoiceReplyMode } from "@/lib/voice-call";
 import type { TeachingTask } from "./routing";
 
 const ids:Partial<Record<TeachingTask,keyof typeof snapshot.nodes>> = {
@@ -22,12 +22,11 @@ const conversationalDelivery = `
 【故事科学复核】用户没有指定主题时默认选择“风推动纸船”，只围绕空气流动推动纸船这一可直接观察的发现来讲，不自行扩展到蜗牛黏液、微观磁畴等未经本轮确认的复杂现象。用户指定其他主题时尊重该主题，并在结尾用一句准确的科学发现收束，不用魔法作结论。水面/镜子里的像叫“倒影”或“像”，由光的反射形成，不能叫“自己的影子”；影子和倒影必须区分。水蒸发后仍以水蒸气存在于空气里，不能说被太阳变没或消失；带黏液的干燥表面不等于所有物质都消失。只允许角色语言拟人，科学解释和最后结论用真实因果。
 `;
 
-export function taskPrompt(task: TeachingTask) {
+export function taskPrompt(task: TeachingTask, voiceMode: VoiceReplyMode = "brief") {
+  if (task === "voice") return voiceCallPrompt(voiceMode);
   const current = baseTaskPrompt(task).replace("园本事实只能依据本轮检索资料，没有资料时明确说明。", "声称来自园本资料的事实只能依据本轮真实材料。");
   return current + (task === "chat" ? conversationalDelivery : task === "lesson"
     ? "\n【活动设计交付】用户需要新的活动设计，检索只用于真实依据，不是生成的前置条件。没有可引用条目时直接给出标为‘原创建议（非园本条目）’的方案，不先说‘资料库暂未收录’或复述检索状态。严格遵守用户的材料、年龄、时长和篇幅限制，不擅自增加电器或额外器材。未指定年龄可注明暂按中班设计。只要一个简单实验时，给出简洁的材料、3至5步玩法、观察问题、科学解释和必要安全提醒，不自动扩写整份教案，不在末尾连问三个问题。明确要完整教案时，依次提供年龄与时长、目标、准备、教师与幼儿活动过程、话术、差异化支持、观察记录及调整、安全与清理。预期现象明确写成预期，不能编造实际完成记录或儿童表现。已接入独立视觉观察，图片证据以本轮输入为准，不能声称系统无法识图。"
-    : task === "voice"
-    ? "\n【内容请求】说‘想听故事’时，直接用72字以内讲完一段有发现和结尾的原创科学小故事，不询问标题，也不说资料库没有内容。未指定主题时讲纸船遇到风的故事：空气流动形成风，风推动纸船。只在明确查找库内原文或媒体时说明检索缺口。角色可以拟人化，但解释科学原因时不能说‘磁铁只爱’‘喜欢某种材料’；应直说普通磁铁能吸铁、镍、钴等少数金属，木头和铝片吸不住。吸不住不是推开，不能写磁铁推开或排斥木头、铝勺。用户指定主题时按其主题讲述。遵守原有科学准确性和安全要求。"
     : "");
 }
 

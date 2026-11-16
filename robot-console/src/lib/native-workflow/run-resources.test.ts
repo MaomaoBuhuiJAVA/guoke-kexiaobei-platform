@@ -9,6 +9,29 @@ vi.mock("@/lib/search", () => ({searchKnowledge: async () => ({
 })}));
 afterEach(() => {vi.unstubAllEnvs();vi.unstubAllGlobals();});
 
+it.each(["推荐一首关于风的科学诗", "请朗读《风的发现》"])("reads a matched science poem in full with its real card link: %s", async message => {
+  const poem = {...packaged.find(item => item.category === "科学诗")!, title: "风的发现", topic: "风", tags: ["风"],
+    body: "风吹树叶轻轻摇，\n小小纸船向前跑。\n".repeat(8) + "流动空气就是风，\n新的发现记心中。"} as unknown as ScienceKnowledgeItem;
+  const fetcher = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetcher);
+  const result = await runTeachingWorkflow({message, voiceCall: true}, {catalog: [poem]});
+  expect(result.reply).toBe(`《风的发现》\n${poem.body}`);
+  expect(result.labLinks).toContainEqual({id: poem.id, title: "风的发现", href: `/lab?item=${poem.id}`});
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("returns real card links for a voice fire-experiment recommendation without narrating procedures", async () => {
+  const fire = packaged.find(item => item.title === "火焰掌") as unknown as ScienceKnowledgeItem;
+  const fetcher = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetcher);
+  const result = await runTeachingWorkflow({message: "请推荐个关于火焰的科学实验", voiceCall: true}, {catalog: [fire]});
+  expect(result.labLinks).toEqual([{id: fire.id, title: "火焰掌", href: `/lab?item=${fire.id}`}]);
+  expect(result.reply).toMatch(/观察|陪同/u);
+  expect(result.reply).not.toMatch(/点燃|倒入|蘸取/u);
+  expect(result.photos).toEqual([]);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
 it("does not substitute general search results for an unavailable named experiment video", async () => {
   for (const key of ["AI_TEXT_API_KEY", "DEEPSEEK_API_KEY", "QWEN_API_KEY", "DASHSCOPE_API_KEY", "QWEN_TTS_API_KEY"]) vi.stubEnv(key, "");
   const result = await runTeachingWorkflow({message: "它的视频呢", history: [

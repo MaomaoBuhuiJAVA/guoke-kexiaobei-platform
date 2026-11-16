@@ -1,8 +1,9 @@
-import {normalizeVoiceCallReply, voiceCallSpeechText} from "./voice-call";
+import {normalizeVoiceCallReply, voiceCallSpeechText, voiceReplyLimit, type VoiceReplyMode} from "./voice-call";
 
 /** Synthesize each stable phrase during generation, with one clip of lookahead. */
-export function createVoiceSpeechQueue<Audio>({signal: parentSignal, prepare, play}: {
+export function createVoiceSpeechQueue<Audio>({signal: parentSignal, mode = "brief", prepare, play}: {
   signal?: AbortSignal;
+  mode?: VoiceReplyMode;
   prepare: (text: string, signal: AbortSignal) => Promise<Audio>;
   play: (audio: Audio, text: string, signal: AbortSignal) => Promise<boolean>;
 }) {
@@ -57,7 +58,8 @@ export function createVoiceSpeechQueue<Audio>({signal: parentSignal, prepare, pl
 
   function flush(text: string, final: boolean) {
     // The last character may become an ellipsis if a later delta exceeds the cap.
-    if (!final && Array.from(text).length === 72) text = Array.from(text).slice(0, 71).join("").trimEnd();
+    const cap = voiceReplyLimit(mode);
+    if (!final && Array.from(text).length === cap) text = Array.from(text).slice(0, cap - 1).join("").trimEnd();
     if (!text.startsWith(queued)) {cancel(); return;}
     let remaining = text.slice(queued.length);
     while (remaining && !signal.aborted) {
@@ -82,12 +84,12 @@ export function createVoiceSpeechQueue<Audio>({signal: parentSignal, prepare, pl
     push(delta: string) {
       if (finalized || signal.aborted) return;
       raw += delta;
-      flush(voiceCallSpeechText(raw), false);
+      flush(voiceCallSpeechText(raw, mode), false);
     },
     finish(reply: string) {
       if (!finalized) {
         finalized = true;
-        flush(normalizeVoiceCallReply(reply), true);
+        flush(normalizeVoiceCallReply(reply, mode), true);
         completion = playback.then(played => played && !signal.aborted).finally(() => {
           parentSignal?.removeEventListener("abort", cancel);
         });
