@@ -20,6 +20,7 @@ import { MobileAppNav, type MobileAppNavItem } from "@/components/MobileAppNav";
 import type { SiteData } from "@/lib/site-data";
 import type { SessionUser } from "@/lib/auth";
 import { AccountMenu } from "@/components/AccountMenu";
+import {ScienceRankingEntry} from "./ScienceRankingEntry";
 
 type AgentHomeProps = {
   data: Pick<SiteData, "profile">;
@@ -120,6 +121,7 @@ export function AgentHome({ data, initialUser }: AgentHomeProps) {
             </span>
           </Link>
 
+          <ScienceRankingEntry/>
           <nav className="flex items-center gap-2 text-sm font-medium">
             <AccountMenu initialUser={initialUser} />
             <Link className="hidden h-10 items-center rounded-[6px] border border-[#c8ddd5] px-3.5 text-[#176b5d] transition hover:bg-[#e6f2ec] sm:inline-flex" href="/works">

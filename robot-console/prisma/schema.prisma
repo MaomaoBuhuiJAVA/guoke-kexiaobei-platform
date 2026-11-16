@@ -102,6 +102,8 @@ model User {
   reviewedStudentWorks StudentWork[]         @relation("StudentWorkReviewer")
   experimentSubmissions ScienceExperimentSubmission[] @relation("ExperimentOwner")
   reviewedExperiments ScienceExperimentSubmission[] @relation("ExperimentReviewer")
+  scienceResourceLikes ScienceResourceLike[]
+  scienceResourceComments ScienceResourceComment[]
   studentWorkComments  StudentWorkComment[]
   studentWorkLikes     StudentWorkLike[]
   growthRecords        StudentGrowthRecord[]
@@ -396,6 +398,42 @@ model StudentGrowthRecord {
 
   @@index([workId, createdAt])
   @@index([authorId, createdAt])
+}
+
+model ScienceResourceStats {
+  itemId String @id
+  views Int @default(0)
+  likes Int @default(0)
+  comments Int @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model ScienceResourceLike {
+  itemId String
+  userId String
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@id([itemId,userId])
+  @@index([userId])
+}
+
+model ScienceResourceComment {
+  id String @id @default(cuid())
+  itemId String
+  authorId String
+  body String @db.Text
+  createdAt DateTime @default(now())
+  author User @relation(fields:[authorId],references:[id],onDelete:Cascade)
+  @@index([itemId,createdAt,id])
+  @@index([authorId])
+}
+
+model ScienceResourceView {
+  itemId String
+  visitorHash String
+  windowStart DateTime
+  @@id([itemId,visitorHash,windowStart])
+  @@index([windowStart])
 }
 
 model ScienceExperimentSubmission {

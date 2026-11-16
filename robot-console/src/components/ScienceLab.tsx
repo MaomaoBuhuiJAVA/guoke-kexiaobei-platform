@@ -3,6 +3,9 @@
 import Image from "next/image";
 import {canManageScience} from "@/lib/science-access";
 import {ExperimentSubmitDialog} from "./ExperimentSubmitDialog";
+import {ScienceSocialProvider,ResourceSocialBar,RecordScienceView,useScienceSocial} from "./ScienceSocial";
+import {ScienceRankingEntry} from "./ScienceRankingEntry";
+import {sortSciencePopularity} from "@/lib/science-social";
 import Link from "next/link";
 import { uploadScienceMaterial } from "@/lib/science-upload-client";
 import { AnimatePresence, motion } from "motion/react";
@@ -436,6 +439,7 @@ function KnowledgeCard({
         </span>
       </span>
     </button>
+    <ResourceSocialBar itemId={item.id} title={item.title}/>
     </div>
   );
 }
@@ -646,6 +650,8 @@ function KnowledgeDetail({
               <div className="markdown-content knowledge-detail__content">
                 <Markdown>{item?.body || display.excerpt}</Markdown>
               </div>
+              {item&&<RecordScienceView itemId={item.id}/>}
+              <ResourceSocialBar itemId={display.id} title={display.title} alwaysComments/>
               {display.resources.some(resource=>resource.isPublic&&(resource.type==="教案资源"||resource.type==="文档资源"))&&<section className="knowledge-detail__documents" aria-label="实验教案与附件"><h3>教案与附件</h3>{display.resources.filter(resource=>resource.isPublic&&(resource.type==="教案资源"||resource.type==="文档资源")).map(resource=><a className="video-link" key={resource.id} href={resource.externalUrl||resource.publicPath} target="_blank" rel="noopener noreferrer"><FileText size={18}/>{resource.title}<ExternalLink size={15}/></a>)}</section>}
 
               {display.category === "科学实验" && images.length ? (
@@ -1172,7 +1178,7 @@ function ScienceMaterialDialog({
   );
 }
 
-export function ScienceLab({
+function ScienceLabContent({
   initialItems,
   initialResourceId,
   initialCategory,
@@ -1207,6 +1213,7 @@ export function ScienceLab({
   const [heroIndex, setHeroIndex] = useState(0);
   const autoOpenedResourceId = useRef<string | null>(null);
   const deferredQuery = useDeferredValue(query);
+  const {order:popularityOrder}=useScienceSocial();
 
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
@@ -1294,8 +1301,8 @@ export function ScienceLab({
   );
 
   const filtered = useMemo(
-    () => filterScienceItems(items, { ...selection, query: deferredQuery }),
-    [deferredQuery, items, selection],
+    () => sortSciencePopularity(filterScienceItems(items, { ...selection, query: deferredQuery }),popularityOrder,"views"),
+    [deferredQuery, items, selection,popularityOrder],
   );
 
   function changeCategory(category: string) {
@@ -1513,6 +1520,7 @@ export function ScienceLab({
             <strong>科小贝资源库</strong>
           </Link>
           <GooeyNav items={labNavItems} activeKey="lab" />
+          <ScienceRankingEntry/>
           <AccountMenu initialUser={initialUser} />
         </div>
       </header>
@@ -1711,4 +1719,8 @@ export function ScienceLab({
       <SciencePet />
     </div>
   );
+}
+
+export function ScienceLab(props:Parameters<typeof ScienceLabContent>[0]){
+  return <ScienceSocialProvider><ScienceLabContent {...props}/></ScienceSocialProvider>;
 }
