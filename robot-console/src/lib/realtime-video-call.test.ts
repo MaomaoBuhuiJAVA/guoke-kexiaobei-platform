@@ -37,6 +37,18 @@ function setup(capture = stream()) {
 }
 afterEach(() => {vi.useRealTimers(); vi.unstubAllGlobals();});
 describe("realtime video lifecycle", () => {
+  it("holds RTP until configured and starts audio before sending video", async () => {
+    vi.useFakeTimers();
+    const s = setup(); await s.call.start();
+    expect(s.peer.senders.map(sender => sender.track)).toEqual([null, null]);
+    s.peer.channel.event({type: "session.updated"});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.peer.senders[0].track).toBe(s.capture.getAudioTracks()[0]);
+    expect(s.peer.senders[1].track).toBeNull();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(s.peer.senders[1].track).toBe(s.capture.getVideoTracks()[0]);
+    s.call.stop();
+  });
   it("preserves the browser receiver when using native fetch", async () => {
     const s = setup();
     vi.stubGlobal("fetch", function(this: unknown) {
@@ -86,7 +98,7 @@ describe("realtime video lifecycle", () => {
     expect(s.turns).toEqual([{role: "assistant", text: "一片叶子"}]); s.call.stop();
   });
   it("actually stops the camera and reacquires it when enabled", async () => {
-    const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"}); await s.call.toggleCamera();
+    vi.useFakeTimers(); const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500); await s.call.toggleCamera();
     expect(s.capture.getVideoTracks()[0].stop).toHaveBeenCalled();
     expect(s.peer.senders[1].track).toBeNull();
     const next = stream(); s.getUserMedia.mockResolvedValueOnce(next as unknown as MediaStream);
@@ -113,7 +125,7 @@ describe("realtime video lifecycle", () => {
     expect(s.capture.tracks.every(t => t.stop.mock.calls.length === 1)).toBe(true);
   });
   it("releases a replacement camera granted after hangup", async () => {
-    const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"});
+    vi.useFakeTimers(); const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
     const replacement = stream(); let resolve!: (s: MediaStream) => void;
     s.getUserMedia.mockImplementationOnce(() => new Promise(r => {resolve = r;}));
     const replacing = s.call.switchCamera(); await Promise.resolve(); s.call.stop();
@@ -134,7 +146,7 @@ describe("realtime video lifecycle", () => {
     expect(ch.sent.filter(e => e.type === "conversation.item.create")).toHaveLength(0); s.call.stop();
   });
   it("does not replace the ended UI with a late camera-off result", async () => {
-    const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"});
+    vi.useFakeTimers(); const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
     let resolve!: () => void;
     s.peer.senders[1].replaceTrack.mockImplementationOnce(() => new Promise<void>(r => {resolve = r;}));
     const closing = s.call.toggleCamera(); s.call.stop(); resolve(); await closing;
@@ -160,7 +172,7 @@ describe("realtime video lifecycle", () => {
     expect(outputs[0]).toMatchObject({item: {call_id: "new-call", output: "资料"}}); s.call.stop();
   });
   it("blocks camera reopening until the previous detach finishes", async () => {
-    const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"});
+    vi.useFakeTimers(); const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
     let resolve!: () => void;
     s.peer.senders[1].replaceTrack.mockImplementationOnce(() => new Promise<void>(r => {resolve = r;}));
     const off = s.call.toggleCamera(); await s.call.toggleCamera();

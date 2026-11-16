@@ -23,7 +23,9 @@ export class RealtimeVideoCall {
   private channels: RTCDataChannel[] = [];
   private tracks = new Set<MediaStreamTrack>();
   private video: MediaStreamTrack | null = null;
+  private audioSender: RTCRtpSender | null = null;
   private videoSender: RTCRtpSender | null = null;
+  private mediaStartTimer: ReturnType<typeof setTimeout> | null = null;
   private controller: AbortController | null = null;
   private session: Record<string, unknown> | null = null;
   private configured = false;
@@ -82,7 +84,11 @@ export class RealtimeVideoCall {
       });
       this.video = stream.getVideoTracks()[0]; this.options.onPreview(stream);
       const peer = (this.options.createPeer || (() => new RTCPeerConnection()))(); this.peer = peer;
-      stream.getTracks().forEach(track => {const sender = peer.addTrack(track, stream); if (track.kind === "video") this.videoSender = sender;});
+      stream.getTracks().forEach(track => {const sender = peer.addTrack(track, stream); if (track.kind === "video") this.videoSender = sender; else if (track.kind === "audio") this.audioSender = sender;});
+      // Disabled tracks still send black/silent RTP. Detach both until the session is ready.
+      await this.audioSender?.replaceTrack(null);
+      await this.videoSender?.replaceTrack(null);
+      if (!this.current(id)) return;
       peer.onconnectionstatechange = () => {
         if (!this.current(id)) return;
         if (["failed", "disconnected", "closed"].includes(peer.connectionState)) this.fail("视频连接已断开，请检查网络后重新拨打。");
@@ -133,6 +139,22 @@ export class RealtimeVideoCall {
     if (!text.trim() || this.turns.has(key)) return;
     this.turns.add(key); this.options.onTurn?.({role, text: text.trim().slice(0, 8000)});
   }
+  private async startMedia(id: number) {
+    try {
+      const audio = [...this.tracks].find(track => track.kind === "audio");
+      if (!audio) throw new Error("missing-audio");
+      await this.audioSender?.replaceTrack(audio);
+      if (!this.current(id)) return;
+      // The provider rejects an image before its first audio packet. Prime audio first.
+      this.mediaStartTimer = setTimeout(() => {
+        this.mediaStartTimer = null;
+        if (!this.current(id)) return;
+        void this.videoSender?.replaceTrack(this.state.camera ? this.video : null).then(() => {
+          if (this.current(id)) this.update({cameraBusy: false});
+        }, () => {if (this.current(id)) this.fail("摄像头连接出现问题，请重新拨打。");});
+      }, 500);
+    } catch {if (this.current(id)) this.fail("麦克风连接出现问题，请重新拨打。");}
+  }
   private receive(event: RealtimeEvent, id: number) {
     if (event.event_id) {
       if (this.seen.has(event.event_id)) return;
@@ -145,7 +167,8 @@ export class RealtimeVideoCall {
         if (this.acknowledged) break;
         this.acknowledged = true; if (this.timeout) clearTimeout(this.timeout);
         this.tracks.forEach(t => {t.enabled = t.kind === "audio" ? this.state.microphone : this.state.camera;});
-        this.update({phase: "listening", notice: "已接通，把想探索的东西放到镜头前吧。"});
+        this.update({phase: "listening", cameraBusy: true, notice: "已接通，把想探索的东西放到镜头前吧。"});
+        void this.startMedia(id);
         this.durationTimer = setTimeout(() => {if (this.current(id)) {this.stop(); this.update({notice: "本次通话已结束，想继续可以再次拨打。"});}}, 10 * 60_000);
         break;
       case "error": this.fail("通话服务遇到问题，请稍后重新拨打。"); break;
@@ -269,10 +292,11 @@ export class RealtimeVideoCall {
   private cleanup() {
     this.active = false; this.generation++; this.controller?.abort(); this.controller = null;
     if (this.timeout) clearTimeout(this.timeout); if (this.durationTimer) clearTimeout(this.durationTimer);
+    if (this.mediaStartTimer) clearTimeout(this.mediaStartTimer); this.mediaStartTimer = null;
     this.timeout = null; this.durationTimer = null;
     for (const channel of this.channels) {channel.onmessage = null; channel.onopen = null; channel.close();}
     this.channels = []; if (this.peer) {this.peer.onconnectionstatechange = null; this.peer.ondatachannel = null; this.peer.ontrack = null; this.peer.close();} this.peer = null;
-    this.tracks.forEach(track => track.stop()); this.tracks.clear(); this.video = null; this.videoSender = null;
+    this.tracks.forEach(track => track.stop()); this.tracks.clear(); this.video = null; this.videoSender = null; this.audioSender = null;
     this.options.audio.pause(); this.options.audio.srcObject = null; this.options.onPreview(null);
     this.session = null; this.configured = false; this.acknowledged = false; this.responseId = ""; this.suppressAudio = false;
     this.tools.clear(); this.toolEpoch++; this.seen.clear(); this.cancelled.clear(); this.turns.clear(); this.handledTools.clear();
