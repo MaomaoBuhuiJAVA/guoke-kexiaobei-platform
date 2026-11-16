@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import {canManageScience} from "@/lib/science-access";
+import {ExperimentSubmitDialog} from "./ExperimentSubmitDialog";
 import Link from "next/link";
 import { uploadScienceMaterial } from "@/lib/science-upload-client";
 import { AnimatePresence, motion } from "motion/react";
@@ -301,7 +302,8 @@ function KnowledgeCard({
   item: ScienceKnowledgeSummary;
   onOpen: () => void;
 }) {
-  const thumbnail = publicImages(item)[0];
+  const cardImages=publicImages(item);
+  const thumbnail = cardImages.find(image=>/封面|cover/iu.test(image.title))??cardImages[0];
   const isLiterature = item.category === "科学诗" || item.category === "科学故事";
   const isStory = item.category === "科学故事";
   const isPoem = item.category === "科学诗";
@@ -466,12 +468,12 @@ function KnowledgeDetail({
     {
       key: "material",
       label: "材料准备",
-      images: images.filter((image) => experimentImageRole(image) === "material"),
+      images: images.filter((image) => experimentImageRole(image) === "material" && !/封面|cover/iu.test(image.title)),
     },
     {
       key: "operation",
       label: "操作步骤",
-      images: images.filter((image) => experimentImageRole(image) !== "material"),
+      images: images.filter((image) => experimentImageRole(image) !== "material" && !/封面|cover/iu.test(image.title)),
     },
   ].filter((group) => group.images.length);
   const videoResources = display.resources.filter(
@@ -644,6 +646,7 @@ function KnowledgeDetail({
               <div className="markdown-content knowledge-detail__content">
                 <Markdown>{item?.body || display.excerpt}</Markdown>
               </div>
+              {display.resources.some(resource=>resource.isPublic&&(resource.type==="教案资源"||resource.type==="文档资源"))&&<section className="knowledge-detail__documents" aria-label="实验教案与附件"><h3>教案与附件</h3>{display.resources.filter(resource=>resource.isPublic&&(resource.type==="教案资源"||resource.type==="文档资源")).map(resource=><a className="video-link" key={resource.id} href={resource.externalUrl||resource.publicPath} target="_blank" rel="noopener noreferrer"><FileText size={18}/>{resource.title}<ExternalLink size={15}/></a>)}</section>}
 
               {display.category === "科学实验" && images.length ? (
                 <section className="knowledge-detail__steps" aria-labelledby="experiment-step-images">
@@ -1199,6 +1202,7 @@ export function ScienceLab({
   const [resourceNotice, setResourceNotice] = useState("");
   const [materialSuccessNotice, setMaterialSuccessNotice] = useState<MaterialSuccessNotice | null>(null);
   const [materialCategory, setMaterialCategory] = useState<MaterialCategory | null>(null);
+  const [experimentUploading,setExperimentUploading]=useState(false);
   const [materialSubmitting, setMaterialSubmitting] = useState(false);
   const [heroIndex, setHeroIndex] = useState(0);
   const autoOpenedResourceId = useRef<string | null>(null);
@@ -1601,19 +1605,20 @@ export function ScienceLab({
             </div>
             <div className="results-heading__context">
               <span>{selection.category || "全部"} / {selection.ageLabel || "全部"}</span>
-              {canManageScience(initialUser) && (selection.category === "科学诗" || selection.category === "科学故事") ? (
+              {canManageScience(initialUser) && (selection.category === "科学诗" || selection.category === "科学故事" || selection.category === "科学实验") ? (
                 <button
                   type="button"
                   className="science-material-add"
                   aria-label="添加新材料"
                   title="添加新材料"
-                  onClick={() => setMaterialCategory(selection.category as MaterialCategory)}
+                  onClick={() => selection.category === "科学实验" ? setExperimentUploading(true) : setMaterialCategory(selection.category as MaterialCategory)}
                 >
                   <Plus size={16} aria-hidden="true" />
                 </button>
               ) : null}
             </div>
           </div>
+          {experimentUploading&&<ExperimentSubmitDialog onClose={()=>setExperimentUploading(false)} onSubmitted={title=>{setExperimentUploading(false);setResourceNotice(`《${title}》已提交审核，通过后会在资源库展示。`);}}/>}
 
           {resourceNotice ? (
             <div className="lab-route-notice" role="status">

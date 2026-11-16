@@ -24,6 +24,10 @@ describe("review queue access and listing", () => {
     expect((await GET(request())).status).toBe(403);
     expect(prisma.studentWork.findMany).not.toHaveBeenCalled();
   });
+  it("lets a verified teacher load the same review queue",async()=>{
+    vi.mocked(getFreshSessionUser).mockResolvedValue({...admin,role:"USER",accountType:"TEACHER",identityVerified:true});
+    expect((await GET(request())).status).toBe(200);
+  });
   it("filters status, searches and paginates without exposing account credentials", async () => {
     const response = await GET(request("?status=REJECTED&q=纸桥&page=2"));
     expect(response.status).toBe(200);

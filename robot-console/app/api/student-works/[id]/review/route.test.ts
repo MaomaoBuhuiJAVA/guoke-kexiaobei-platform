@@ -1,82 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@/lib/auth", () => ({
-  getSessionUser: vi.fn(),
-  requireAdmin: vi.fn(),
-}));
-
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    studentWork: {
-      findUnique: vi.fn(),
-      update: vi.fn(),
-    },
-    knowledgeDocument: {
-      create: vi.fn(),
-    },
-  },
-}));
-
-import { getSessionUser, requireAdmin } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { POST } from "./route";
-
-const teacher = { id: "teacher-1", email: "teacher@example.com", name: "教师", role: "ADMIN" as const };
-
-function request(body: unknown) {
-  return new Request("http://localhost/api/student-works/work-1/review", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-describe("student work review", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(getSessionUser).mockResolvedValue(teacher);
-    vi.mocked(requireAdmin).mockResolvedValue(teacher);
-    vi.mocked(prisma.studentWork.findUnique).mockResolvedValue({
-      id: "work-1",
-      title: "纸片桥",
-      description: "观察承重变化",
-      mediaUrl: "https://media.example/work.png",
-      mimeType: "image/png",
-      ownerId: "student-1",
-      status: "PENDING",
-      visibility: "TEACHER_ONLY",
-      libraryDocumentId: null,
-    } as never);
-    vi.mocked(prisma.studentWork.update).mockResolvedValue({ id: "work-1", status: "APPROVED", visibility: "PUBLIC" } as never);
-  });
-
-  it("publishes only after teacher approval and can explicitly ingest into the library", async () => {
-    vi.mocked(prisma.knowledgeDocument.create).mockResolvedValue({ id: "doc-1", title: "纸片桥" } as never);
-
-    const response = await POST(request({ action: "approve", visibility: "public", addToLibrary: true, reviewNote: "材料清楚" }), { params: Promise.resolve({ id: "work-1" }) });
-
-    expect(response.status).toBe(200);
-    expect(prisma.studentWork.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "work-1" },
-      data: expect.objectContaining({ status: "APPROVED", visibility: "PUBLIC", reviewedBy: teacher.id, libraryDocumentId: "doc-1" }),
-    }));
-    expect(prisma.knowledgeDocument.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ title: "纸片桥", sourcePath: "student-work:work-1" }) }));
-  });
-
-  it("rejects non-teachers and never changes the work", async () => {
-    vi.mocked(requireAdmin).mockResolvedValue(null);
-    vi.mocked(getSessionUser).mockResolvedValue({ ...teacher, role: "USER" });
-    const response = await POST(request({ action: "approve" }), { params: Promise.resolve({ id: "work-1" }) });
-    expect(response.status).toBe(403);
-    expect(prisma.studentWork.update).not.toHaveBeenCalled();
-  });
-
-  it("returns a generic 503 when the works table is unavailable", async () => {
-    vi.mocked(prisma.studentWork.findUnique).mockRejectedValue(new Error("P2021 table does not exist"));
-
-    const response = await POST(request({ action: "approve" }), { params: Promise.resolve({ id: "work-1" }) });
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({ error: "审核服务暂时不可用，请稍后重试" });
-  });
+import {beforeEach,expect,it,vi} from "vitest";
+const {tx}=vi.hoisted(()=>({tx:{studentWork:{findUnique:vi.fn(),updateMany:vi.fn(),update:vi.fn()},knowledgeDocument:{create:vi.fn()}}}));
+vi.mock("@/lib/auth",()=>({getFreshSessionUser:vi.fn()}));
+vi.mock("@/lib/prisma",()=>({prisma:{studentWork:{findUnique:vi.fn()},$transaction:vi.fn()}}));
+import {getFreshSessionUser} from "@/lib/auth";
+import {prisma} from "@/lib/prisma";
+import {POST} from "./route";
+const reviewer={id:"teacher",name:"教师",role:"USER" as const,accountType:"TEACHER" as const,identityVerified:true};
+const context={params:Promise.resolve({id:"work"})};
+const request=(body:unknown)=>new Request("http://localhost/api/student-works/work/review",{method:"POST",body:JSON.stringify(body)});
+beforeEach(()=>{vi.resetAllMocks();vi.mocked(getFreshSessionUser).mockResolvedValue(reviewer);vi.mocked(prisma.studentWork.findUnique).mockResolvedValue({updatedAt:new Date("2026-11-16T00:00:00Z")} as never);vi.mocked(prisma.$transaction).mockImplementation(async callback=>(callback as unknown as (client:typeof tx)=>Promise<unknown>)(tx) as never);tx.studentWork.findUnique.mockResolvedValue({id:"work",status:"PENDING",title:"纸桥",mediaUrl:"/file.png",mimeType:"image/png"});tx.studentWork.updateMany.mockResolvedValue({count:1});tx.knowledgeDocument.create.mockResolvedValue({id:"doc"});});
+it("lets verified teachers use the legacy action through the protected review transaction",async()=>{
+  expect((await POST(request({action:"approve",visibility:"public",addToLibrary:true}),context)).status).toBe(200);
+  expect(tx.studentWork.updateMany).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reviewedBy:"teacher",status:"APPROVED"})}));
+});
+it("does not publish internal work or accept a rejection without a reason",async()=>{
+  expect((await POST(request({action:"approve",visibility:"teacher",addToLibrary:true}),context)).status).toBe(400);
+  expect((await POST(request({action:"reject"}),context)).status).toBe(400);
+  expect(tx.knowledgeDocument.create).not.toHaveBeenCalled();
+});
+it("rejects already reviewed work and concurrent updates",async()=>{
+  tx.studentWork.findUnique.mockResolvedValue({status:"APPROVED"});expect((await POST(request({action:"approve"}),context)).status).toBe(409);
+  tx.studentWork.findUnique.mockResolvedValue({status:"PENDING"});tx.studentWork.updateMany.mockResolvedValue({count:0});expect((await POST(request({action:"approve"}),context)).status).toBe(409);
+});
+it("denies ordinary accounts before reading or changing submissions",async()=>{
+  vi.mocked(getFreshSessionUser).mockResolvedValue({...reviewer,accountType:"PARENT"});
+  expect((await POST(request({action:"approve"}),context)).status).toBe(403);expect(prisma.studentWork.findUnique).not.toHaveBeenCalled();
 });

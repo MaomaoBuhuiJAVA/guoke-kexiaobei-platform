@@ -4,8 +4,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
 import { AccountMenu } from "@/components/AccountMenu";
+import {canReviewSubmissions} from "@/lib/review-access";
 import {
   Check,
   ChevronRight,
@@ -103,7 +105,7 @@ export function StudentWorks({ initialUser }: { initialUser: SessionUser | null 
     if (mineResponse.ok) setMine(((await mineResponse.json()) as { works?: Work[] }).works ?? []);
     const archiveResponse = await fetch("/api/student-works/archive", { cache: "no-store" });
     if (archiveResponse.ok) setArchiveRecords(((await archiveResponse.json()) as { records?: ArchiveRecord[] }).records ?? []);
-    if (user?.role === "ADMIN") {
+    if (canReviewSubmissions(user)) {
       const reviewResponse = await fetch("/api/student-works?scope=review", { cache: "no-store" });
       if (reviewResponse.ok) setReviewQueue(((await reviewResponse.json()) as { works?: Work[] }).works ?? []);
     }
@@ -171,9 +173,9 @@ export function StudentWorks({ initialUser }: { initialUser: SessionUser | null 
   }
 
   async function reviewWork(action: "approve" | "reject") {
-    if (!selected || user?.role !== "ADMIN") return;
+    if (!selected || !canReviewSubmissions(user)) return;
     setBusy(true);
-    const response = await fetch(`/api/student-works/${selected.id}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, visibility: reviewVisibility, reviewNote, addToLibrary }) });
+    const response = await fetch(`/api/student-works/${selected.id}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, visibility: reviewVisibility, reviewNote, addToLibrary: reviewVisibility === "public" && addToLibrary }) });
     const payload = (await response.json()) as { error?: string };
     setBusy(false);
     if (!response.ok) { setNotice(payload.error ?? "审核失败"); return; }
@@ -183,7 +185,7 @@ export function StudentWorks({ initialUser }: { initialUser: SessionUser | null 
   return (
     <main className="student-works-page">
       <header className="student-works-header">
-        <div><a className="mb-3 inline-flex" href="/" aria-label="科小贝首页"><BrandLogo variant="wordmark" size={48} /></a><br /><span className="student-works-kicker">科小贝 · 成长档案</span><h1>科学作品展示</h1><p>把每次观察、表达和尝试留在自己的探究记录里。</p></div>
+        <div><Link className="mb-3 inline-flex" href="/" aria-label="科小贝首页"><BrandLogo variant="wordmark" size={48} /></Link><br /><span className="student-works-kicker">科小贝 · 成长档案</span><h1>科学作品展示</h1><p>把每次观察、表达和尝试留在自己的探究记录里。</p></div>
         <a className="student-works-home" href="/lab">返回实验室 <ChevronRight size={16} /></a>
         <AccountMenu initialUser={user} />
       </header>
@@ -193,7 +195,7 @@ export function StudentWorks({ initialUser }: { initialUser: SessionUser | null 
           <button className={tab === "showcase" ? "is-active" : ""} onClick={() => setTab("showcase")} type="button"><Sparkles size={16} />公开展示</button>
           <button className={tab === "mine" ? "is-active" : ""} onClick={() => setTab("mine")} type="button"><Heart size={16} />我的成长</button>
           <button className={tab === "archive" ? "is-active" : ""} onClick={() => setTab("archive")} type="button"><BookOpen size={16} />成长档案</button>
-          {user?.role === "ADMIN" ? <button className={tab === "review" ? "is-active" : ""} onClick={() => setTab("review")} type="button"><Check size={16} />教师审核 {reviewQueue.length ? `(${reviewQueue.length})` : ""}</button> : null}
+          {canReviewSubmissions(user) ? <button className={tab === "review" ? "is-active" : ""} onClick={() => setTab("review")} type="button"><Check size={16} />教师审核 {reviewQueue.length ? `(${reviewQueue.length})` : ""}</button> : null}
         </div>
 
         {
@@ -242,7 +244,7 @@ export function StudentWorks({ initialUser }: { initialUser: SessionUser | null 
               {selected.comments.length ? <div className="student-work-comments">{selected.comments.map((item) => <div key={item.id}><strong>{item.authorName}</strong><span>{item.body}</span><time>{formatDate(item.createdAt)}</time></div>)}</div> : null}
               {selected.status === "APPROVED" && selected.visibility === "PUBLIC" ? <form className="student-work-inline-form" onSubmit={submitComment}><input aria-label="评论" placeholder="写一句鼓励或观察" value={comment} onChange={(event) => setComment(event.target.value)} /><button type="submit" aria-label="发送评论"><Send size={16} /></button></form> : null}
               {selected.status === "APPROVED" && selected.visibility === "PUBLIC" ? <form className="student-work-growth" onSubmit={submitGrowth}><div><strong>成长档案</strong><span>把下一步观察写下来</span></div><select aria-label="成长阶段" value={growth.stage} onChange={(event) => setGrowth({ ...growth, stage: event.target.value })}><option>观察记录</option><option>再次尝试</option><option>我的发现</option><option>教师反馈</option></select><textarea aria-label="成长记录" placeholder="这次我发现……下次我想试试……" value={growth.note} onChange={(event) => setGrowth({ ...growth, note: event.target.value })} /><button className="student-work-secondary" type="submit">保存成长记录</button>{selected.growthRecords.length ? <div className="student-work-growth-list">{selected.growthRecords.map((item) => <div key={item.id}><strong>{item.stage}</strong><span>{item.note}</span></div>)}</div> : null}</form> : null}
-              {user?.role === "ADMIN" && selected.status === "PENDING" ? <div className="student-work-review"><strong>教师审核</strong><label><input type="radio" checked={reviewVisibility === "teacher"} onChange={() => setReviewVisibility("teacher")} />仅教师可见</label><label><input type="radio" checked={reviewVisibility === "public"} onChange={() => setReviewVisibility("public")} />审核后公开</label><label className="student-work-check"><input type="checkbox" checked={addToLibrary} onChange={(event) => setAddToLibrary(event.target.checked)} />同时写入园本资料库</label><textarea aria-label="审核意见" placeholder="审核意见（可选）" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} /><div><button className="student-work-secondary" disabled={busy} onClick={() => void reviewWork("reject")} type="button">退回修改</button><button className="student-work-primary" disabled={busy} onClick={() => void reviewWork("approve")} type="button"><Check size={16} />通过审核</button></div></div> : null}
+              {canReviewSubmissions(user) && selected.status === "PENDING" ? <div className="student-work-review"><strong>教师审核</strong><label><input type="radio" checked={reviewVisibility === "teacher"} onChange={() => setReviewVisibility("teacher")} />仅教师可见</label><label><input type="radio" checked={reviewVisibility === "public"} onChange={() => setReviewVisibility("public")} />审核后公开</label><label className="student-work-check"><input type="checkbox" checked={addToLibrary} onChange={(event) => setAddToLibrary(event.target.checked)} />同时写入园本资料库</label><textarea aria-label="审核意见" placeholder="审核意见（退回时必填）" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} /><div><button className="student-work-secondary" disabled={busy} onClick={() => void reviewWork("reject")} type="button">退回修改</button><button className="student-work-primary" disabled={busy} onClick={() => void reviewWork("approve")} type="button"><Check size={16} />通过审核</button></div></div> : null}
             </div>
           </section>
         </div>

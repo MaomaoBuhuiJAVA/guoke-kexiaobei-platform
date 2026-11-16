@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import {canReviewSubmissions} from "@/lib/review-access";
 import { prisma } from "@/lib/prisma";
 import { resolveMediaUrl } from "@/lib/media-links";
 
 type Params = { params: Promise<{ id: string }> };
 
 function canView(work: { ownerId: string; status: string; visibility: string }, user: Awaited<ReturnType<typeof getSessionUser>>) {
-  return work.status === "APPROVED" && work.visibility === "PUBLIC" || Boolean(user && (user.role === "ADMIN" || user.id === work.ownerId));
+  return work.status === "APPROVED" && work.visibility === "PUBLIC" || Boolean(user && (canReviewSubmissions(user) || user.id === work.ownerId));
 }
 
 export async function GET(_request: Request, { params }: Params) {
@@ -29,7 +30,7 @@ export async function GET(_request: Request, { params }: Params) {
   if (!work) return NextResponse.json({ error: "作品不存在" }, { status: 404 });
   if (!canView(work, session)) return NextResponse.json({ error: "作品尚未公开" }, { status: 404 });
 
-  const privateView = Boolean(session && (session.role === "ADMIN" || session.id === work.ownerId));
+  const privateView = Boolean(session && (canReviewSubmissions(session) || session.id === work.ownerId));
   const comments = work.comments.map((comment) => ({
     id: comment.id,
     body: comment.body,

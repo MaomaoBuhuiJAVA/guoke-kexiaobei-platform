@@ -26,6 +26,8 @@ function imageRank(resource: ScienceResource) {
 }
 
 export function experimentImageCaption(resource: ScienceResource) {
+  const submittedStep=resource.title.match(/^操作步骤(\d+)\s*·\s*(.+)$/u);
+  if(submittedStep)return `操作步骤 ${Number(submittedStep[1])}：${submittedStep[2]}`;
   const match = roleMatch(resource);
   const number = match?.pattern.exec(resource.title)?.[1];
 

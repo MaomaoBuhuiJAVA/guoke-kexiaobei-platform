@@ -144,7 +144,7 @@ export function ReviewDashboard({ reviewerName }: { reviewerName: string }) {
         <nav aria-label="审核中心导航"><Link href="/works">作品展示<ArrowRight size={15} /></Link><Link className={styles.user} href="/auth"><UserRound size={16} /><span>{reviewerName}</span></Link></nav>
       </header>
       <div className={styles.main}>
-        <div className={styles.pageHeading}><div><h1>投稿审核<span className={styles.titleDot} /></h1><p>认真看见每一份探索，让值得分享的发现被更多人看见。</p></div><span className={styles.access}><ShieldCheck size={16} />仅审核管理员可访问</span></div>
+        <div className={styles.pageHeading}><div><h1>投稿审核<span className={styles.titleDot} /></h1><p>认真看见每一份探索，让值得分享的发现被更多人看见。</p></div><span className={styles.access}><ShieldCheck size={16} />已核验教师与管理员可审核</span></div>
         <div className={styles.stats} aria-label="投稿状态统计">
           <Stat label="待审核" number={counts?.PENDING} icon={Clock3} tone="amber" description="等待你的查看与反馈" />
           <Stat label="已通过" number={counts?.APPROVED} icon={CheckCircle2} tone="green" description="已确认内容与展示范围" />
@@ -180,7 +180,7 @@ export function ReviewDashboard({ reviewerName }: { reviewerName: string }) {
             <div className={styles.decisionColumn}>{selected.status === "PENDING" ? <>
               <h3><ShieldCheck size={19} />审核这份投稿</h3><p className={styles.sectionHint}>请核对附件内容，并确认适合的展示范围。</p>
               <fieldset className={styles.decisionFields} disabled={busy}><legend>通过后的展示范围</legend>
-                <label className={visibility === "teacher" ? styles.selectedOption : ""}><input type="radio" name="visibility" value="teacher" checked={visibility === "teacher"} onChange={() => { setVisibility("teacher"); setAddToLibrary(false); }} /><span><strong>保留为内部资料</strong><small>仅投稿人和审核管理员可查看</small></span><LockKeyhole size={18} /></label>
+                <label className={visibility === "teacher" ? styles.selectedOption : ""}><input type="radio" name="visibility" value="teacher" checked={visibility === "teacher"} onChange={() => { setVisibility("teacher"); setAddToLibrary(false); }} /><span><strong>保留为内部资料</strong><small>仅投稿人和有审核权限的教师、管理员可查看</small></span><LockKeyhole size={18} /></label>
                 <label className={visibility === "public" ? styles.selectedOption : ""}><input type="radio" name="visibility" value="public" checked={visibility === "public"} onChange={() => setVisibility("public")} /><span><strong>公开展示</strong><small>所有访客可在作品展示页浏览</small></span><CheckCircle2 size={18} /></label>
                 <label className={styles.libraryOption}><input type="checkbox" disabled={visibility !== "public"} checked={addToLibrary} onChange={(event) => setAddToLibrary(event.target.checked)} /><span><strong>同时加入公开园本资料库</strong><small>仅公开投稿可入库，供浏览和 AI 参考</small></span><BookOpenCheck size={18} /></label>
               </fieldset>

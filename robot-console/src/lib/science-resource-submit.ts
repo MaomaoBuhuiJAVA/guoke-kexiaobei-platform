@@ -49,7 +49,7 @@ export function publicResourceUrl(value: unknown) {
   }
 }
 
-export function createScienceResourceIds(prefix: "POEM" | "STORY") {
+export function createScienceResourceIds(prefix: "POEM" | "STORY" | "EXP") {
   const suffix = randomUUID().replaceAll("-", "").slice(0, 12).toLowerCase();
   return {
     id: `${prefix}-${suffix}`,

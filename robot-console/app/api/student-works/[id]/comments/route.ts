@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getPublicActor, getSessionUser } from "@/lib/auth";
+import {canReviewSubmissions} from "@/lib/review-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
 
 function canInteract(work: { ownerId: string; status: string; visibility: string }, user: Awaited<ReturnType<typeof getSessionUser>>) {
-  return work.status === "APPROVED" && work.visibility === "PUBLIC" || Boolean(user && (user.role === "ADMIN" || user.id === work.ownerId));
+  return work.status === "APPROVED" && work.visibility === "PUBLIC" || Boolean(user && (canReviewSubmissions(user) || user.id === work.ownerId));
 }
 
 async function loadWork(id: string) {

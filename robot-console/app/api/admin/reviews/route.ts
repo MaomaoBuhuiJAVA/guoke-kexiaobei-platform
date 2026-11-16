@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { getFreshSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {canReviewSubmissions} from "@/lib/review-access";
 
 const privateHeaders = { "Cache-Control": "private, no-store" };
 
@@ -9,7 +10,7 @@ export async function GET(request: Request) {
   try {
     const user = await getFreshSessionUser();
     if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
-    if (user.role !== "ADMIN") return NextResponse.json({ error: "只有审核管理员可以查看投稿" }, { status: 403 });
+    if (!canReviewSubmissions(user)) return NextResponse.json({ error: "需要已核验教师或管理员审核权限" }, { status: 403 });
 
     const params = new URL(request.url).searchParams;
     const status = params.get("status") ?? "PENDING";

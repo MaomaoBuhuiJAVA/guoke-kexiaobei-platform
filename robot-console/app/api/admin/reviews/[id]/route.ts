@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import { getFreshSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {canReviewSubmissions} from "@/lib/review-access";
+import {checkAuthOrigin} from "@/lib/auth-request";
 
 class ReviewConflict extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {checkAuthOrigin(request);} catch {return NextResponse.json({error:"请从本网站发起审核"},{status:403});}
   try {
     const user = await getFreshSessionUser();
     if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
-    if (user.role !== "ADMIN") return NextResponse.json({ error: "只有审核管理员可以处理投稿" }, { status: 403 });
+    if (!canReviewSubmissions(user)) return NextResponse.json({ error: "需要已核验教师或管理员审核权限" }, { status: 403 });
 
     let body: Record<string, unknown>;
     try {

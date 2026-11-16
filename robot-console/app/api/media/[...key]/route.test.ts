@@ -4,6 +4,7 @@ vi.mock("@/lib/auth", () => ({ getSessionUser: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ prisma: {
   scienceKnowledgeResource: { findFirst: vi.fn() },
   studentWork: { findFirst: vi.fn() },
+  scienceExperimentSubmission: {findFirst:vi.fn()},
 } }));
 const oss = vi.hoisted(() => ({ signatureUrl: vi.fn() }));
 vi.mock("@/lib/oss-media", async (original) => ({
@@ -29,8 +30,20 @@ describe("private OSS media access", () => {
     vi.mocked(getSessionUser).mockResolvedValue(null);
     vi.mocked(prisma.scienceKnowledgeResource.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.studentWork.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.scienceExperimentSubmission.findFirst).mockResolvedValue(null);
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  it("serves pending experiment images privately to verified teacher reviewers only",async()=>{
+    vi.mocked(getSessionUser).mockResolvedValue({id:"reviewer",name:"教师",role:"USER",accountType:"TEACHER",identityVerified:true});
+    vi.mocked(prisma.scienceExperimentSubmission.findFirst).mockResolvedValue({id:"pending"} as never);
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response("image",{headers:{"content-type":"image/png"}})));
+    const context={params:Promise.resolve({key:["uploads","science-resources","supporting","step.png"]})};
+    const response=await GET(new Request("https://site.example/api/media/uploads/science-resources/supporting/step.png"),context);
+    expect(response.status).toBe(200);expect(response.headers.get("cache-control")).toBe("private, no-store");
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+    expect((await GET(new Request("https://site.example/api/media/uploads/science-resources/supporting/step.png"),context)).status).toBe(404);
+  });
 
   it("streams public catalog video ranges without leaking a signed storage address", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("part", { status: 206, headers: {

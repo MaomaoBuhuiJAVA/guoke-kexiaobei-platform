@@ -1,6 +1,7 @@
 import { persistOssUpload } from "@/lib/oss-upload";
 import { NextResponse } from "next/server";
 import { getFreshSessionUser, getPublicActor, getSessionUser } from "@/lib/auth";
+import {canReviewSubmissions} from "@/lib/review-access";
 import { prisma } from "@/lib/prisma";
 import { resolveMediaUrl } from "@/lib/media-links";
 
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
   let includePrivate = false;
 
   if (scope === "review") {
-    if (!session || session.role !== "ADMIN") {
+    if (!canReviewSubmissions(session)) {
       return NextResponse.json({ error: "需要教师权限" }, { status: 403 });
     }
     where = status ? { status } : { status: "PENDING" };

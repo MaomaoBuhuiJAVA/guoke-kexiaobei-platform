@@ -1,4 +1,5 @@
 import { getSessionUser } from "@/lib/auth";
+import {canReviewSubmissions} from "@/lib/review-access";
 import { prisma } from "@/lib/prisma";
 import { createOssClient, isStudentWorkObjectKey, mediaObjectKey, mediaRouteUrl } from "@/lib/oss-media";
 import manifestData from "@/data/oss-media-manifest.json";
@@ -41,7 +42,7 @@ async function accessFor(entry: Entry, requestUrl: string, requestedKey: string)
     if (work) {
       if (work.status === "APPROVED" && work.visibility === "PUBLIC") return "public";
       const user = await getSessionUser();
-      return user && user.id !== "public-participant" && (user.role === "ADMIN" || user.id === work.ownerId) ? "private" : null;
+      return user && user.id !== "public-participant" && (canReviewSubmissions(user) || user.id === work.ownerId) ? "private" : null;
     }
     // A catalogue reference cannot publish a private or unregistered work.
     if (studentWorkKey) return null;
@@ -56,7 +57,14 @@ async function accessFor(entry: Entry, requestUrl: string, requestedKey: string)
       ] },
       select: { id: true },
     });
-    return resource ? "public" : null;
+    if(resource)return "public";
+    if(entry.key.startsWith("uploads/science-resources/")){
+      const user=await getSessionUser();
+      if(!user)return null;
+      const submission=await prisma.scienceExperimentSubmission.findFirst({where:{mediaUrls:{hasSome:references},...(!canReviewSubmissions(user)?{ownerId:user.id}:{})},select:{id:true}});
+      if(submission)return "private";
+    }
+    return null;
   } catch { return null; }
 }
 

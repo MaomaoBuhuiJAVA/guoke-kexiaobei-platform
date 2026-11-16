@@ -100,6 +100,8 @@ model User {
   assets               MediaAsset[]          @relation("AssetUploader")
   studentWorks         StudentWork[]         @relation("StudentWorkOwner")
   reviewedStudentWorks StudentWork[]         @relation("StudentWorkReviewer")
+  experimentSubmissions ScienceExperimentSubmission[] @relation("ExperimentOwner")
+  reviewedExperiments ScienceExperimentSubmission[] @relation("ExperimentReviewer")
   studentWorkComments  StudentWorkComment[]
   studentWorkLikes     StudentWorkLike[]
   growthRecords        StudentGrowthRecord[]
@@ -394,6 +396,26 @@ model StudentGrowthRecord {
 
   @@index([workId, createdAt])
   @@index([authorId, createdAt])
+}
+
+model ScienceExperimentSubmission {
+  id              String            @id @default(cuid())
+  title           String
+  ownerId         String
+  payload         Json
+  mediaUrls       String[]          @default([])
+  status          StudentWorkStatus @default(PENDING)
+  reviewNote      String?           @db.Text
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  publishedItemId String?           @unique
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  owner           User              @relation("ExperimentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  reviewer        User?             @relation("ExperimentReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([ownerId, createdAt])
 }
 
 model ScienceKnowledgeItem {

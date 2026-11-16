@@ -35,6 +35,11 @@ describe("review decisions", () => {
     }));
     expect(tx.knowledgeDocument.create).not.toHaveBeenCalled();
   });
+  it("records a verified teacher's review without promoting them to admin",async()=>{
+    vi.mocked(getFreshSessionUser).mockResolvedValue({...admin,id:"teacher-1",role:"USER",accountType:"TEACHER",identityVerified:true});
+    expect((await PATCH(request({action:"approve",expectedUpdatedAt:updatedAt}),params)).status).toBe(200);
+    expect(tx.studentWork.updateMany).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reviewedBy:"teacher-1"})}));
+  });
   it("publishes only explicitly and writes optional library content inside the transaction", async () => {
     const response = await PATCH(request({ action: "approve", visibility: "public", addToLibrary: true, expectedUpdatedAt: updatedAt }), params);
     expect(response.status).toBe(200);
