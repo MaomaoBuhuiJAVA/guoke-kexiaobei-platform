@@ -1,5 +1,64 @@
-import { expect, it } from "vitest";
-import { createVoiceSpeechQueue } from "./voice-speech";
+import { expect, it, vi } from "vitest";
+import { createVoiceSpeechQueue, requestVoiceSpeech } from "./voice-speech";
+
+it("recovers one temporary TTS outage and returns the clip instead of losing the rest of the story", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response('',{status:503}))
+    .mockResolvedValueOnce(new Response('WAV',{headers:{'Content-Type':'audio/wav'}}));
+  const blob = await requestVoiceSpeech('故事的最后，小纸船到了岸边。',new AbortController().signal,fetcher);
+  expect(await blob.text()).toBe('WAV');
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("retries a network interruption while reading a successful TTS response body", async () => {
+  const broken=new Response(new ReadableStream({start(controller){controller.error(new TypeError('network interrupted'));}}));
+  const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(broken).mockResolvedValueOnce(new Response('WAV'));
+  expect(await (await requestVoiceSpeech('正文',new AbortController().signal,fetcher)).text()).toBe('WAV');
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("does not retry a rejected TTS input or retry after hangup", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('',{status:400}));
+  await expect(requestVoiceSpeech('正文',new AbortController().signal,fetcher)).rejects.toThrow();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  fetcher.mockClear();
+  await expect(requestVoiceSpeech('正文',AbortSignal.abort(),fetcher)).rejects.toThrow();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("bounds retries for a persistent TTS outage", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async()=>new Response('',{status:503}));
+  await expect(requestVoiceSpeech('正文',new AbortController().signal,fetcher)).rejects.toThrow();
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});
+
+it("groups later story sentences into fewer requests while retaining every character and the ending", async () => {
+  const prepared: string[] = [];
+  const reply = '开头，小纸船出发了。' + '流动的空气推动小纸船。'.repeat(60) + '故事结束，小纸船平安回家。';
+  const queue = createVoiceSpeechQueue({mode:'content',prepare:async text=>{prepared.push(text);return text;},play:async()=>true});
+  for(let offset=0;offset<reply.length;offset+=9)queue.push(reply.slice(offset,offset+9));
+  expect(await queue.finish(reply)).toBe(true);
+  expect(prepared.join('')).toBe(reply);
+  expect(prepared.length).toBeLessThan(12);
+});
+
+it("keeps closing story quotation marks with a spoken phrase instead of synthesizing punctuation alone", async () => {
+  const prepared:string[]=[];
+  const queue=createVoiceSpeechQueue({mode:'content',prepare:async text=>{prepared.push(text);return text;},play:async()=>true});
+  queue.push('小熊问：“光从哪里来？');
+  queue.push('”\n妈妈说：“太阳发出光。”');
+  expect(await queue.finish('小熊问：“光从哪里来？”\n妈妈说：“太阳发出光。”')).toBe(true);
+  expect(prepared.every(text=>/[\p{L}\p{N}]/u.test(text))).toBe(true);
+});
+
+it("keeps nested closing quotation marks together even when each arrives in a separate delta", async () => {
+  const prepared:string[]=[];
+  const queue=createVoiceSpeechQueue({mode:'content',prepare:async text=>{prepared.push(text);return text;},play:async()=>true});
+  for(const part of ['妈妈说：“小熊说：‘太阳发出光。','’','”'])queue.push(part);
+  const full='妈妈说：“小熊说：‘太阳发出光。’”';
+  expect(await queue.finish(full)).toBe(true);
+  expect(prepared.join('')).toBe(full);
+  expect(prepared.every(text=>/[\p{L}\p{N}]/u.test(text))).toBe(true);
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -119,7 +178,7 @@ it("bounds synthesis to the current clip plus one prefetched clip", async () => 
   expect(prepared).toEqual(["先看一看。", "再摸一摸。", "最后说一说。"]);
 });
 
-it("keeps earlier streamed speech when a long final answer hits the voice limit", async () => {
+it("speaks all remaining sentences even when a reply exceeds the old brief limit", async () => {
   const spoken: string[] = [];
   const queue = createVoiceSpeechQueue({prepare: async text => text, play: async text => {spoken.push(text);return true;}});
   queue.push("水蒸气遇冷会变成小水珠。");
@@ -127,7 +186,7 @@ it("keeps earlier streamed speech when a long final answer hits the voice limit"
   const long = "水蒸气遇冷会变成小水珠。我们一起看看杯壁上的水珠。" + "你还发现了什么呢？".repeat(10);
   expect(await queue.finish(long)).toBe(true);
   expect(spoken.join("")).toContain("我们一起看看杯壁上的水珠。");
-  expect(Array.from(spoken.join("")).length).toBeLessThanOrEqual(72);
+  expect(spoken.join("")).toBe(long);
 });
 
 it("does not speak unfinished reasoning tags or fenced code", async () => {
@@ -165,14 +224,14 @@ it("reports a changed authoritative reply instead of silently dropping it", asyn
   expect(await queue.finish("月亮反射太阳光。")).toBe(false);
 });
 
-it("does not commit the retractable last character at the 72-character limit", async () => {
+it("continues naturally past 72 characters without inserting an ellipsis", async () => {
   const spoken: string[] = [];
   const queue = createVoiceSpeechQueue({prepare: async text => text, play: async text => {spoken.push(text); return true;}});
   const prefix = "看".repeat(31) + "。" + "想".repeat(39) + "。";
   queue.push(prefix);
   queue.push("后面还有不需要读的长篇说明。");
   expect(await queue.finish(prefix + "后面还有不需要读的长篇说明。")).toBe(true);
-  expect(spoken.join("")).toBe(Array.from(prefix).slice(0, 71).join("") + "…");
+  expect(spoken.join("")).toBe(prefix + "后面还有不需要读的长篇说明。");
 });
 
 it("keeps emoji intact when splitting unpunctuated speech and preserves all short text", async () => {

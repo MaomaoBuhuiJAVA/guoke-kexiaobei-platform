@@ -3,7 +3,7 @@ import { parseAgentResult, type AgentResult, type AgentFailureResult, type Poetr
 import type { AiChatResponse, AiChatStreamEvent } from "@/lib/ai-chat-stream";
 import type { ConversationMessage } from "@/lib/types";
 import type { ScienceKnowledgeItem } from "@/lib/science-types";
-import { normalizeVoiceCallReply, voiceReplyMode } from "@/lib/voice-call";
+import { normalizeVoiceCallReply, voiceReplyMode, requestsStoryContent } from "@/lib/voice-call";
 import { isSiteResourceQuery, requestedDocumentUrl, routeTeachingRequest } from "./routing";
 import { completeModel, ModelUnavailableError, type ModelMessage } from "./model";
 import { taskPrompt, schemaPrompt, plainDocumentPrompt, readingGuidancePrompt, visualEvidencePrompt, currentTeachingSiteLinks } from "./prompts";
@@ -98,6 +98,7 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
     }
     if(attachment) result.attachment={name:attachment.name,status:"uploaded",message:"附件已读取。"};
     const route=routeTeachingRequest({message,history,voiceCall:body.voiceCall,attachmentType:attachment?.type,state});
+    const storyContent = (route.task === "chat" || route.task === "voice") && requestsStoryContent(route.effectiveQuery);
     let visual="";
     if(attachment?.dataUrl) {
       emit({type:"status",message:"正在读取图片中的可见内容…"});
@@ -124,7 +125,7 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
     const skipFireCatalog = highRiskFireTopic && !firePoemLookup;
     const fireResourceLookup = body.voiceCall && skipFireCatalog && /找|查|推荐/u.test(message)
       && /实验|资源|视频|图片/u.test(message) && !/怎么|如何|步骤|操作|生成|设计/u.test(message);
-    const safeFireDraft = skipFireCatalog ? safeFireActivity(message, body.voiceCall) : undefined;
+    const safeFireDraft = skipFireCatalog && !storyContent ? safeFireActivity(message, body.voiceCall) : undefined;
     const followUpMedia = route.followUp && /视频|二维码|图片|照片|步骤图/u.test(message)
       && !/托班|小班|中班|大班|上册|下册|科学诗|科学故事|科学实验/u.test(message)
       && !/[《〈「“"][^》〉」”"]+[》〉」”"]/u.test(message);
@@ -239,9 +240,9 @@ export async function runTeachingWorkflow(body:NativeChatBody, options:WorkflowO
       if (!route.format) emitText(sourcePrefix);
       else result.reply = sourceDraft;
     }
-    const spokenStory = body.voiceCall && /故事/u.test(message) && /讲|听/u.test(message) && !/找|查|库|视频|原文/u.test(message);
+    const spokenStory = body.voiceCall && storyContent;
     const directAnswer = route.task === "chat" || route.task === "lesson" && !route.format && !/完整|详细|教案|教学设计|教学活动设计表|课件/u.test(message);
-    let generated=route.previousDraft || safeFireDraft || (sourceDraft && !summarizeSource ? sourceDraft : await completeModel({messages,signal,json:structured,voiceCall:body.voiceCall,voiceMode,preferTextModel:spokenStory,thinking:directAnswer ? false : undefined,maxTokens:body.voiceCall?(voiceMode === "content" ? 1600 : 160):route.task==="lesson"||route.format?6500:4000,
+    let generated=route.previousDraft || safeFireDraft || (sourceDraft && !summarizeSource ? sourceDraft : await completeModel({messages,signal,json:structured,voiceCall:body.voiceCall,voiceMode,preferTextModel:spokenStory,thinking:directAnswer ? false : undefined,maxTokens:body.voiceCall?(voiceMode === "content" ? 3000 : 600):route.task==="lesson"||route.format?6500:4000,
       onDelta:!structured && !route.format && onEvent ? emitText : undefined,
     }));
     if (!route.previousDraft && route.task !== "document_analysis") generated = currentTeachingSiteLinks(generated);

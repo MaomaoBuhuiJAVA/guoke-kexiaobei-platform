@@ -1,4 +1,36 @@
-import {normalizeVoiceCallReply, voiceCallSpeechText, voiceReplyLimit, type VoiceReplyMode} from "./voice-call";
+import {normalizeVoiceCallReply, voiceCallSpeechText, type VoiceReplyMode} from "./voice-call";
+
+function waitForSpeechRetry(signal: AbortSignal, milliseconds: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {reject(new DOMException("Aborted", "AbortError"));return;}
+    const onAbort = () => {clearTimeout(timer);reject(new DOMException("Aborted", "AbortError"));};
+    const timer = setTimeout(() => {signal.removeEventListener("abort", onAbort);resolve();}, milliseconds);
+    signal.addEventListener("abort", onAbort, {once:true});
+  });
+}
+
+/** Recover transient provider errors without replaying already spoken clips. */
+export async function requestVoiceSpeech(text: string, signal: AbortSignal, fetchImpl: typeof fetch = fetch): Promise<Blob> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    let response: Response;
+    try {
+      response = await fetchImpl("/api/voice/tts", {
+        method:"POST", signal, headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({text,voiceCall:true}),
+      });
+      if (response.ok) return await response.blob();
+    } catch (error) {
+      if (signal.aborted || attempt === 2) throw error;
+      await waitForSpeechRetry(signal, 400 * (attempt + 1));
+      continue;
+    }
+    await response.body?.cancel();
+    if (attempt === 2 || response.status !== 429 && response.status < 500) throw new Error("TTS request failed");
+    await waitForSpeechRetry(signal, 400 * (attempt + 1));
+  }
+  throw new Error("TTS request failed");
+}
 
 /** Synthesize each stable phrase during generation, with one clip of lookahead. */
 export function createVoiceSpeechQueue<Audio>({signal: parentSignal, mode = "brief", prepare, play}: {
@@ -57,14 +89,14 @@ export function createVoiceSpeechQueue<Audio>({signal: parentSignal, mode = "bri
   }
 
   function flush(text: string, final: boolean) {
-    // The last character may become an ellipsis if a later delta exceeds the cap.
-    const cap = voiceReplyLimit(mode);
-    if (!final && Array.from(text).length === cap) text = Array.from(text).slice(0, cap - 1).join("").trimEnd();
     if (!text.startsWith(queued)) {cancel(); return;}
     let remaining = text.slice(queued.length);
     while (remaining && !signal.aborted) {
-      const characters = Array.from(remaining), first = !queued, limit = first ? 32 : 48;
-      const sentence = characters.findIndex(character => /[。！？!?；;]/u.test(character)) + 1;
+      const characters = Array.from(remaining), first = !queued, grouped = !first && mode === "content", limit = first ? 32 : grouped ? 140 : 48;
+      if (grouped && !final && characters.length < limit) break;
+      const sentence = grouped
+        ? characters.slice(0,limit).findLastIndex(character => /[。！？!?；;]/u.test(character)) + 1
+        : characters.findIndex(character => /[。！？!?；;]/u.test(character)) + 1;
       let length = sentence && sentence <= limit ? sentence : 0;
       if (!length && first) {
         const pause = characters.findIndex((character, index) => index >= 7 && index < limit && /[，,：:]/u.test(character)) + 1;
@@ -74,6 +106,12 @@ export function createVoiceSpeechQueue<Audio>({signal: parentSignal, mode = "bri
       if (!length && characters.length >= limit + 8) length = limit;
       if (!length && final) length = Math.min(limit, characters.length);
       if (!length) break;
+      if (mode === "content") {
+        // A quote following a sentence may arrive in the next model delta.
+        if (!final && length === characters.length) break;
+        while (length < characters.length && /[”’」』）》"']/u.test(characters[length])) length++;
+        if (!final && length === characters.length) break;
+      }
       const phrase = characters.slice(0, length).join("");
       enqueue(phrase);
       remaining = remaining.slice(phrase.length);

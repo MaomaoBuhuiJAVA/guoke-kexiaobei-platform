@@ -47,7 +47,7 @@ import { assistantDisplayText, assistantFallbackText, hasVisibleAssistantText } 
 import { createWebUserId } from "@/lib/chat-session";
 import { clearChatHistory, readChatHistory, writeChatHistory, type StoredChatMessage } from "@/lib/chat-history";
 import { normalizeVoiceCallReply, voiceCallSpeechText, voiceReplyMode } from "@/lib/voice-call";
-import { createVoiceSpeechQueue } from "@/lib/voice-speech";
+import { createVoiceSpeechQueue, requestVoiceSpeech } from "@/lib/voice-speech";
 import { createVoiceTranscriptBuffer } from "@/lib/voice-transcript";
 import { compatibleSpeechRecognitionConstructor, markNativeSpeechUnavailable } from "@/lib/recorded-speech";
 import { playSpeechBatches, playSpeechClip } from "@/lib/speech-batches";
@@ -1332,15 +1332,7 @@ export function SciencePet() {
     const speech = createVoiceSpeechQueue({
       signal: thinking.abortController.signal,
       mode: replyMode,
-      prepare: async (text, signal) => {
-        const response = await fetch("/api/voice/tts", {
-          method: "POST", signal,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, voiceCall: true }),
-        });
-        if (!response.ok) throw new Error("TTS request failed");
-        return response.blob();
-      },
+      prepare: requestVoiceSpeech,
       play: (audioBlob, text, signal) => new Promise<boolean>(resolve => {
         if (signal.aborted || !isCurrentVoiceCall(sessionId)) {resolve(false);return;}
         let settled = false;

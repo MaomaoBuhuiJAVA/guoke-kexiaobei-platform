@@ -12,6 +12,30 @@ import { readTeachingArtifact } from "./artifacts";
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 function textModel(content:string) {return Response.json({choices:[{message:{content}}]});}
 describe("native teaching workflow",()=>{
+  it.each([
+    ["请你生成一个跟火焰有关的科学故事", false],
+    ["给我讲一个科学故事", false],
+    ["火焰有关的科学故事", true],
+  ])("delivers a complete narrative for the reported request %s (voice=%s)", async (message, voiceCall) => {
+    vi.stubEnv("QWEN_TTS_API_KEY", "text-key");
+    const story = "原创科学故事《小火苗的光》\n" + "小朋友和老师隔着屏幕观察火苗，发现火焰会发光，也会放出热。".repeat(20) + "最后，小朋友记住了：观察要有成人陪伴，不触碰、不点火。";
+    const fetcher = vi.fn<typeof fetch>(async () => textModel(story));
+    vi.stubGlobal("fetch", fetcher);
+    const result = await runTeachingWorkflow({message, voiceCall}, {catalog: teachingCatalog as ScienceKnowledgeItem[]});
+    expect(result.reply).toBe(story);
+    expect(result.reply).not.toContain("活动过程");
+    const sent = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    expect(sent.model).toBe("qwen3.5-plus");
+    expect(sent.max_tokens).toBeGreaterThanOrEqual(2400);
+    expect(sent.messages[0].content).toContain("500至800字");
+  });
+
+  it.each(["帮我找一个科学故事", "推荐一个关于风的科学故事", "查一个科学故事", "请帮我给小班找一个科学故事", "给孩子找一个科学故事"])("keeps real catalogue lookup for %s", async message => {
+    const result = await runTeachingWorkflow({message}, {catalog: []});
+    expect(result.workflowState?.task).toBe("resources");
+    expect(result.reply).toContain("暂未收录");
+  });
+
   it("delivers a complete spoken story with enough model budget and no contradictory short-answer instruction", async () => {
     vi.stubEnv("QWEN_TTS_API_KEY", "text-key");
     const story = "原创科学故事。" + "小纸船停在水面上，小朋友扇动纸板，流动的空气推动小船。".repeat(10) + "它终于到岸了，原来风就是流动的空气。";

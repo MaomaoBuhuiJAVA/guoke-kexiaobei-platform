@@ -1,5 +1,6 @@
 import type { ConversationMessage } from "@/lib/types";
 import type { TeachingWorkflowState } from "./state";
+import { requestsStoryContent } from "@/lib/voice-call";
 
 export type TeachingTask = "lesson" | "resources" | "document_analysis" | "document_creation" | "illustration" | "vision" | "poetry_cover" | "recap" | "feedback" | "chat" | "voice";
 export type TeachingFormat = "docx" | "pdf" | "pptx" | "xlsx";
@@ -105,7 +106,7 @@ function requestedTask(message: string, effectiveQuery: string, attachmentType?:
     || /[《〈「“"][^》〉」”"]+[》〉」”"]/u.test(message) && !/写|编|创作|生成/u.test(message);
   if (!explicitLookup) {
     if (/为什么|原因|原理|是什么|怎么形成|如何解释|怎么.{0,12}(?:讲|读|解释)/u.test(message)) return "chat";
-    if (/(?:故事|科学诗|诗歌|童谣)/u.test(message) && /讲|听|写|编|创作|生成|来一个|来一首/u.test(message)
+    if (requestsStoryContent(message) || /(?:科学诗|诗歌|童谣)/u.test(message) && /讲|听|写|编|创作|生成|来一个|来一首/u.test(message)
       || /^(?:科学)?故事[。！!\s]*$/u.test(message)) return "chat";
     if (/实验|探究活动/u.test(message) && /想做|想玩|给我.*方案|教我做|带我做/u.test(message)) return "lesson";
   }

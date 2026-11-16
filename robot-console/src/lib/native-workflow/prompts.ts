@@ -1,5 +1,5 @@
 import snapshot from "@/data/teaching-workflow.json";
-import { VOICE_CALL_PROMPT, voiceCallPrompt, type VoiceReplyMode } from "@/lib/voice-call";
+import { VOICE_CALL_PROMPT, voiceCallPrompt, FIRE_STORY_SCIENCE, type VoiceReplyMode } from "@/lib/voice-call";
 import type { TeachingTask } from "./routing";
 
 const ids:Partial<Record<TeachingTask,keyof typeof snapshot.nodes>> = {
@@ -13,7 +13,7 @@ export function currentTeachingSiteLinks(text: string) {
 const conversationalDelivery = `
 【按本轮意图交付内容】
 先判断用户是要听内容、理解知识、修改上一条，还是要查找真实资料。用户说“我想听一个科学故事”“讲个故事”“科学故事”就是完整请求，直接讲一个适合3—6岁幼儿的原创科学故事；未指定主题时自行选择风、光影、磁铁或沉浮等日常主题，不先追问标题、年龄或主题，不输出“资料库暂未收录”。
-原创故事开头简短标注“原创科学故事”，默认约200至350字，有具体角色、一个疑问、可理解的发现和完整结尾。可以拟人化讲故事，但发现的科学原因必须真实；例如风是流动的空气，不能把物体有意愿或魔法当成科学原因。用户只要故事时，不追加完整教案、材料清单或长篇说教。
+原创故事开头简短标注“原创科学故事”，默认约500至800字，有具体角色和场景、一个疑问、两至三个逐步推进的情节、观察与发现和完整结尾，不用一段简短知识说明代替故事。用户明确要求短故事或指定篇幅时遵从要求。可以拟人化讲故事，但发现的科学原因必须真实；例如风是流动的空气，不能把物体有意愿或魔法当成科学原因。用户只要故事时，不追加完整教案、材料清单或长篇说教。火焰主题可以通过成人陪伴下观看图片或视频展开安全的观察故事，不把故事替换成实验方案或安全告示，不提供点火或燃烧操作步骤，结尾自然融入一句安全提醒。
 明确要求写诗、编童谣或原创内容时直接创作并标注“原创”；园本资源标题与诗句须来自真实资料的限制只针对引用资料，不禁止明确标注的原创。原创内容不能称为园本资料，也不能编造资源ID、视频或链接。
 普通知识问题即使提到“科学故事”“实验”“推荐”，也先解释问题，不把关键词当作检索命令。解释面向提问者，简洁准确；按要求展开时再给细节。用户明确查找库内资料、指定标题的原文或媒体时，只依据真实结果回答，找不到时说明具体缺口。
 “短一点”“再讲一个”“换成小班听”等修改承接上一条回答，保留已确认的主题和年龄；用户明确换主题时遵从新主题。语音转写中的轻微口误可按上下文理解，只有影响意思时才问一个简短问题。
@@ -25,7 +25,7 @@ const conversationalDelivery = `
 export function taskPrompt(task: TeachingTask, voiceMode: VoiceReplyMode = "brief") {
   if (task === "voice") return voiceCallPrompt(voiceMode);
   const current = baseTaskPrompt(task).replace("园本事实只能依据本轮检索资料，没有资料时明确说明。", "声称来自园本资料的事实只能依据本轮真实材料。");
-  return current + (task === "chat" ? conversationalDelivery : task === "lesson"
+  return current + (task === "chat" ? conversationalDelivery + FIRE_STORY_SCIENCE : task === "lesson"
     ? "\n【活动设计交付】用户需要新的活动设计，检索只用于真实依据，不是生成的前置条件。没有可引用条目时直接给出标为‘原创建议（非园本条目）’的方案，不先说‘资料库暂未收录’或复述检索状态。严格遵守用户的材料、年龄、时长和篇幅限制，不擅自增加电器或额外器材。未指定年龄可注明暂按中班设计。只要一个简单实验时，给出简洁的材料、3至5步玩法、观察问题、科学解释和必要安全提醒，不自动扩写整份教案，不在末尾连问三个问题。明确要完整教案时，依次提供年龄与时长、目标、准备、教师与幼儿活动过程、话术、差异化支持、观察记录及调整、安全与清理。预期现象明确写成预期，不能编造实际完成记录或儿童表现。已接入独立视觉观察，图片证据以本轮输入为准，不能声称系统无法识图。"
     : "");
 }
