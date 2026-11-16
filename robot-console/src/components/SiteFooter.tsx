@@ -11,6 +11,7 @@ export function SiteFooter({ children }: { children?: ReactNode }) {
           <span>龙湾区国科温州第二幼儿园 · 科小贝资源库</span>
           <span>guokeey.cn</span>
           <a className="font-medium underline-offset-4 hover:underline" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">浙ICP备2026086562号-1</a>
+          <a className="font-medium underline-offset-4 hover:underline" href="https://beian.mps.gov.cn/#/query/webSearch?code=33030302261105" target="_blank" rel="noopener noreferrer">浙公网安备33030302261105号</a>
         </div>
       </div>
     </footer>
