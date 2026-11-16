@@ -1,4 +1,4 @@
-import {normalizeVoiceCallReply, voiceCallSpeechText, voiceReplyLimit, type VoiceReplyMode} from "./voice-call";
+import {normalizeVoiceCallReply, voiceCallSpeechText, type VoiceReplyMode} from "./voice-call";
 
 /** Synthesize each stable phrase during generation, with one clip of lookahead. */
 export function createVoiceSpeechQueue<Audio>({signal: parentSignal, mode = "brief", prepare, play}: {
@@ -57,9 +57,6 @@ export function createVoiceSpeechQueue<Audio>({signal: parentSignal, mode = "bri
   }
 
   function flush(text: string, final: boolean) {
-    // The last character may become an ellipsis if a later delta exceeds the cap.
-    const cap = voiceReplyLimit(mode);
-    if (!final && Array.from(text).length === cap) text = Array.from(text).slice(0, cap - 1).join("").trimEnd();
     if (!text.startsWith(queued)) {cancel(); return;}
     let remaining = text.slice(queued.length);
     while (remaining && !signal.aborted) {

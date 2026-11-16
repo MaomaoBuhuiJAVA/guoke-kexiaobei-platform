@@ -31,11 +31,16 @@ describe("voice call replies", () => {
       .toBe("可以试试影子剧场。把手电筒和小玩偶准备好。");
   });
 
-  it("removes markdown and clips long model output", () => {
+  it("removes markdown without cutting off the model's complete answer even on the brief path", () => {
     const reply = normalizeVoiceCallReply("## 活动建议\n可以做一个光影实验。" + "请观察并记录变化。".repeat(20));
     expect(reply).not.toContain("##");
-    expect(Array.from(reply).length).toBeLessThanOrEqual(72);
-    expect(reply).toMatch(/[。！？!?…]$/u);
+    expect(reply).toContain("请看一看、记下来变化。".repeat(20));
+    expect(reply.endsWith("变化。")).toBe(true);
+  });
+
+  it("keeps a full content reply beyond the previous 2400-character cap", () => {
+    const story = "风吹过水面，纸船慢慢向前走。".repeat(200) + "最后，纸船平安到达岸边。";
+    expect(normalizeVoiceCallReply(story, "content")).toBe(story);
   });
 
   it("uses child-friendly wording for common formal phrases", () => {
@@ -50,7 +55,7 @@ describe("voice call replies", () => {
   });
 
   it("requires a concise spoken answer", () => {
-    expect(VOICE_CALL_PROMPT).toContain("最多两句");
+    expect(VOICE_CALL_PROMPT).toContain("普通知识问答");
     expect(VOICE_CALL_PROMPT).toContain("不要使用Markdown");
     expect(VOICE_CALL_PROMPT).toContain("3—6岁");
     expect(VOICE_CALL_PROMPT).toContain("科学小伙伴");

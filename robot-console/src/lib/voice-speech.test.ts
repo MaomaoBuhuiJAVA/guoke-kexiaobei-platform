@@ -119,7 +119,7 @@ it("bounds synthesis to the current clip plus one prefetched clip", async () => 
   expect(prepared).toEqual(["先看一看。", "再摸一摸。", "最后说一说。"]);
 });
 
-it("keeps earlier streamed speech when a long final answer hits the voice limit", async () => {
+it("speaks all remaining sentences even when a reply exceeds the old brief limit", async () => {
   const spoken: string[] = [];
   const queue = createVoiceSpeechQueue({prepare: async text => text, play: async text => {spoken.push(text);return true;}});
   queue.push("水蒸气遇冷会变成小水珠。");
@@ -127,7 +127,7 @@ it("keeps earlier streamed speech when a long final answer hits the voice limit"
   const long = "水蒸气遇冷会变成小水珠。我们一起看看杯壁上的水珠。" + "你还发现了什么呢？".repeat(10);
   expect(await queue.finish(long)).toBe(true);
   expect(spoken.join("")).toContain("我们一起看看杯壁上的水珠。");
-  expect(Array.from(spoken.join("")).length).toBeLessThanOrEqual(72);
+  expect(spoken.join("")).toBe(long);
 });
 
 it("does not speak unfinished reasoning tags or fenced code", async () => {
@@ -165,14 +165,14 @@ it("reports a changed authoritative reply instead of silently dropping it", asyn
   expect(await queue.finish("月亮反射太阳光。")).toBe(false);
 });
 
-it("does not commit the retractable last character at the 72-character limit", async () => {
+it("continues naturally past 72 characters without inserting an ellipsis", async () => {
   const spoken: string[] = [];
   const queue = createVoiceSpeechQueue({prepare: async text => text, play: async text => {spoken.push(text); return true;}});
   const prefix = "看".repeat(31) + "。" + "想".repeat(39) + "。";
   queue.push(prefix);
   queue.push("后面还有不需要读的长篇说明。");
   expect(await queue.finish(prefix + "后面还有不需要读的长篇说明。")).toBe(true);
-  expect(spoken.join("")).toBe(Array.from(prefix).slice(0, 71).join("") + "…");
+  expect(spoken.join("")).toBe(prefix + "后面还有不需要读的长篇说明。");
 });
 
 it("keeps emoji intact when splitting unpunctuated speech and preserves all short text", async () => {
