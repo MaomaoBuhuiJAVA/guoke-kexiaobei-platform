@@ -5,7 +5,7 @@ export type VideoCallState = {
   microphone: boolean; camera: boolean; speaker: boolean; facing: "user" | "environment"; cameraBusy: boolean;
 };
 export const initialVideoCallState: VideoCallState = {phase: "idle", notice: "让科小贝看一看，一起聊科学", user: "", assistant: "", microphone: true, camera: true, speaker: true, facing: "environment", cameraBusy: false};
-type RealtimeEvent = {type: string; event_id?: string; response_id?: string; item_id?: string; delta?: string; transcript?: string; text?: string; stash?: string; response?: {id?: string; status?: string}; name?: string; call_id?: string; arguments?: string};
+type RealtimeEvent = {type: string; event_id?: string; response_id?: string; item_id?: string; delta?: string; transcript?: string; text?: string; stash?: string; response?: {id?: string; status?: string}; name?: string; call_id?: string; arguments?: string; error?: {type?: string; code?: string; message?: string}};
 type Options = {
   audio: HTMLAudioElement; onState: (state: VideoCallState) => void; onPreview: (stream: MediaStream | null) => void;
   onTurn?: (turn: {role: "user" | "assistant"; text: string}) => void; onResources?: (links: VideoResourceLink[]) => void;
@@ -26,6 +26,8 @@ export class RealtimeVideoCall {
   private audioSender: RTCRtpSender | null = null;
   private videoSender: RTCRtpSender | null = null;
   private mediaStartTimer: ReturnType<typeof setTimeout> | null = null;
+  private videoWaitingForAudio = false;
+  private cameraOperation = false;
   private controller: AbortController | null = null;
   private session: Record<string, unknown> | null = null;
   private configured = false;
@@ -145,15 +147,36 @@ export class RealtimeVideoCall {
       if (!audio) throw new Error("missing-audio");
       await this.audioSender?.replaceTrack(audio);
       if (!this.current(id)) return;
-      // The provider rejects an image before its first audio packet. Prime audio first.
-      this.mediaStartTimer = setTimeout(() => {
-        this.mediaStartTimer = null;
-        if (!this.current(id)) return;
-        void this.videoSender?.replaceTrack(this.state.camera ? this.video : null).then(() => {
-          if (this.current(id)) this.update({cameraBusy: false});
-        }, () => {if (this.current(id)) this.fail("摄像头连接出现问题，请重新拨打。");});
-      }, 500);
+      this.resumeVideoAfterAudio(id);
     } catch {if (this.current(id)) this.fail("麦克风连接出现问题，请重新拨打。");}
+  }
+  private resumeVideoAfterAudio(id: number) {
+    if (this.mediaStartTimer) clearTimeout(this.mediaStartTimer);
+    // Each committed turn may clear the provider's audio buffer. Resume only after audio.
+    this.mediaStartTimer = setTimeout(() => {
+      this.mediaStartTimer = null;
+      if (!this.current(id)) return;
+      void this.videoSender?.replaceTrack(this.state.camera ? this.video : null).then(() => {
+        if (!this.current(id)) return;
+        this.videoWaitingForAudio = false;
+        if (!this.cameraOperation) this.update({cameraBusy: false});
+      }, () => {if (this.current(id)) this.fail("摄像头连接出现问题，请重新拨打。");});
+    }, 500);
+  }
+  private handleProviderError(event: RealtimeEvent, id: number) {
+    // This request error rejects only an out-of-order frame; the live session is usable.
+    if (this.acknowledged && event.error?.type === "invalid_request_error"
+      && event.error.message?.trim() === "Error append image before append audio.") {
+      if (this.videoWaitingForAudio) return;
+      this.videoWaitingForAudio = true;
+      if (this.mediaStartTimer) clearTimeout(this.mediaStartTimer);
+      this.mediaStartTimer = null;
+      void this.videoSender?.replaceTrack(null).then(() => {
+        if (this.current(id) && !this.cameraOperation) this.update({cameraBusy: false});
+      }, () => {if (this.current(id)) this.fail("摄像头连接出现问题，请重新拨打。");});
+      return;
+    }
+    this.fail("通话服务遇到问题，请稍后重新拨打。");
   }
   private receive(event: RealtimeEvent, id: number) {
     if (event.event_id) {
@@ -171,8 +194,9 @@ export class RealtimeVideoCall {
         void this.startMedia(id);
         this.durationTimer = setTimeout(() => {if (this.current(id)) {this.stop(); this.update({notice: "本次通话已结束，想继续可以再次拨打。"});}}, 10 * 60_000);
         break;
-      case "error": this.fail("通话服务遇到问题，请稍后重新拨打。"); break;
+      case "error": this.handleProviderError(event, id); break;
       case "input_audio_buffer.speech_started":
+        if (this.videoWaitingForAudio) this.resumeVideoAfterAudio(id);
         this.cancelCurrentResponse(false); this.update({phase: "listening", user: "", assistant: "", notice: "你说，我在听。"}); break;
       case "input_audio_buffer.speech_stopped": this.update({phase: "thinking", notice: "科小贝正在看、正在想…"}); break;
       case "conversation.item.input_audio_transcription.delta":
@@ -251,10 +275,12 @@ export class RealtimeVideoCall {
     if (!this.active || !this.acknowledged || this.state.cameraBusy) return;
     if (this.video) {
       const id = this.generation;
+      this.cameraOperation = true;
       this.update({cameraBusy: true});
       const old = this.video; this.tracks.delete(old); old.stop(); this.video = null;
       try {await this.videoSender?.replaceTrack(null);} catch {if (this.current(id)) this.fail("摄像头连接出现问题，请重新拨打。"); return;}
       if (!this.current(id)) return;
+      this.cameraOperation = false;
       this.options.onPreview(null);
       this.update({camera: false, cameraBusy: false, notice: "摄像头已关闭，可以继续语音聊天。"});
       this.send({type: "conversation.item.create", item: {type: "message", role: "user", content: [{type: "input_text", text: "我已关闭摄像头。之后不要把旧画面当作当前所见，直到重新开启。"}]}});
@@ -266,6 +292,7 @@ export class RealtimeVideoCall {
   }
   private async replaceCamera(facing: "user" | "environment") {
     const id = this.generation;
+    this.cameraOperation = true;
     this.update({cameraBusy: true});
     const old = this.video; if (old) {this.tracks.delete(old); old.stop(); this.video = null;}
     this.options.onPreview(null);
@@ -280,12 +307,12 @@ export class RealtimeVideoCall {
       if (!video) {stopStream(stream); throw new Error("missing-camera");}
       this.video = video; this.tracks.add(video);
       video.addEventListener("ended", () => {if (this.current(id) && this.tracks.has(video)) this.fail("摄像头已断开，请重新拨打。");});
-      await this.videoSender?.replaceTrack(video);
+      if (!this.videoWaitingForAudio) await this.videoSender?.replaceTrack(video);
       if (!this.current(id)) return;
       this.options.onPreview(stream); this.update({camera: true, facing, notice: "摄像头已开启，科小贝可以看见新画面了。"});
     } catch {
       if (this.current(id)) {if (this.video) {this.tracks.delete(this.video); this.video.stop(); this.video = null;} this.update({camera: false, notice: "未能开启这个摄像头，可重新开启或继续语音聊天。"});}
-    } finally {if (this.current(id)) this.update({cameraBusy: false});}
+    } finally {if (this.current(id)) {this.cameraOperation = false; this.update({cameraBusy: false});}}
   }
   private fail(notice: string) {this.cleanup(); this.update({phase: "error", notice, camera: false, microphone: false, cameraBusy: false});}
   stop() {this.cleanup(); this.update({phase: "ended", notice: "通话已结束", camera: false, microphone: false, cameraBusy: false});}
@@ -298,7 +325,7 @@ export class RealtimeVideoCall {
     this.channels = []; if (this.peer) {this.peer.onconnectionstatechange = null; this.peer.ondatachannel = null; this.peer.ontrack = null; this.peer.close();} this.peer = null;
     this.tracks.forEach(track => track.stop()); this.tracks.clear(); this.video = null; this.videoSender = null; this.audioSender = null;
     this.options.audio.pause(); this.options.audio.srcObject = null; this.options.onPreview(null);
-    this.session = null; this.configured = false; this.acknowledged = false; this.responseId = ""; this.suppressAudio = false;
+    this.session = null; this.configured = false; this.acknowledged = false; this.responseId = ""; this.suppressAudio = false; this.videoWaitingForAudio = false; this.cameraOperation = false;
     this.tools.clear(); this.toolEpoch++; this.seen.clear(); this.cancelled.clear(); this.turns.clear(); this.handledTools.clear();
   }
 }

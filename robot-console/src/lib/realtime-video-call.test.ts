@@ -37,6 +37,62 @@ function setup(capture = stream()) {
 }
 afterEach(() => {vi.useRealTimers(); vi.unstubAllGlobals();});
 describe("realtime video lifecycle", () => {
+  it("keeps the call and subtitles when a frame arrives before the next audio buffer", async () => {
+    vi.useFakeTimers(); const s = setup(); await s.call.start(); const ch = s.peer.channel;
+    ch.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
+    ch.event({type: "response.created", response: {id: "round-1"}});
+    ch.event({type: "response.audio_transcript.delta", response_id: "round-1", delta: "这是一个鼠标。"});
+    ch.event({type: "response.done", response: {id: "round-1"}});
+    ch.event({type: "error", error: {type: "invalid_request_error", message: "Error append image before append audio."}});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.states.at(-1)).toMatchObject({phase: "listening", assistant: "这是一个鼠标。", camera: true});
+    expect(s.peer.close).not.toHaveBeenCalled();
+    expect(s.capture.tracks.every(track => track.stop.mock.calls.length === 0)).toBe(true);
+    expect(s.peer.senders[1].track).toBeNull();
+    ch.event({type: "input_audio_buffer.speech_started"});
+    await vi.advanceTimersByTimeAsync(500);
+    expect(s.peer.senders[1].track).toBe(s.capture.getVideoTracks()[0]);
+    ch.event({type: "response.created", response: {id: "round-2"}});
+    ch.event({type: "response.audio_transcript.delta", response_id: "round-2", delta: "这是绿色的圆形。"});
+    expect(s.states.at(-1)?.assistant).toBe("这是绿色的圆形。"); s.call.stop();
+  });
+  it("does not restart video after hangup during frame recovery", async () => {
+    vi.useFakeTimers(); const s = setup(); await s.call.start(); const ch = s.peer.channel;
+    ch.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
+    ch.event({type: "error", error: {type: "invalid_request_error", message: "Error append image before append audio."}});
+    ch.event({type: "input_audio_buffer.speech_started"});
+    s.call.stop(); const replacements = s.peer.senders[1].replaceTrack.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(s.peer.senders[1].replaceTrack).toHaveBeenCalledTimes(replacements);
+    expect(s.states.at(-1)?.phase).toBe("ended");
+  });
+  it("keeps an intentionally closed camera off when audio resumes during recovery", async () => {
+    vi.useFakeTimers(); const s = setup(); await s.call.start(); const ch = s.peer.channel;
+    ch.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
+    ch.event({type: "error", error: {type: "invalid_request_error", message: "Error append image before append audio."}});
+    await vi.advanceTimersByTimeAsync(0); await s.call.toggleCamera();
+    ch.event({type: "input_audio_buffer.speech_started"}); await vi.advanceTimersByTimeAsync(500);
+    expect(s.peer.senders[1].track).toBeNull(); expect(s.states.at(-1)?.camera).toBe(false); s.call.stop();
+  });
+  it("does not unlock a pending camera switch when frame recovery finishes", async () => {
+    vi.useFakeTimers(); const s = setup(); await s.call.start(); const ch = s.peer.channel;
+    ch.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
+    ch.event({type: "error", error: {type: "invalid_request_error", message: "Error append image before append audio."}});
+    await vi.advanceTimersByTimeAsync(0);
+    let resolve!: (stream: MediaStream) => void;
+    s.getUserMedia.mockImplementationOnce(() => new Promise(r => {resolve = r;}));
+    const switching = s.call.switchCamera(); await vi.advanceTimersByTimeAsync(0);
+    ch.event({type: "input_audio_buffer.speech_started"}); await vi.advanceTimersByTimeAsync(500);
+    expect(s.states.at(-1)?.cameraBusy).toBe(true);
+    await s.call.switchCamera(); expect(s.getUserMedia).toHaveBeenCalledTimes(2);
+    resolve(stream() as unknown as MediaStream); await switching; s.call.stop();
+  });
+  it("still releases all media on an unknown provider error", async () => {
+    const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"});
+    s.peer.channel.event({type: "error", error: {type: "server_error", code: "session_expired", message: "Session expired"}});
+    expect(s.states.at(-1)?.phase).toBe("error");
+    expect(s.peer.close).toHaveBeenCalled(); expect(s.capture.tracks.every(track => track.stop.mock.calls.length === 1)).toBe(true);
+  });
   it("holds RTP until configured and starts audio before sending video", async () => {
     vi.useFakeTimers();
     const s = setup(); await s.call.start();
