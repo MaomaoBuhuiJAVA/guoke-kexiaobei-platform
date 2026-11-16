@@ -13,6 +13,9 @@ type Options = {
   createPeer?: () => RTCPeerConnection; fetchImpl?: typeof fetch;
 };
 const stopStream = (stream: MediaStream) => stream.getTracks().forEach(track => track.stop());
+const cameraConstraints = (facing: "user" | "environment"): MediaTrackConstraints => ({
+  facingMode: {ideal: facing}, width: {ideal: 960}, height: {ideal: 540}, frameRate: {ideal: 30, max: 30},
+});
 
 /** Owns one call. Every asynchronous operation is scoped to its generation. */
 export class RealtimeVideoCall {
@@ -49,6 +52,17 @@ export class RealtimeVideoCall {
   private update(change: Partial<VideoCallState>) {this.state = {...this.state, ...change}; this.options.onState(this.state);}
   private current(id: number) {return this.active && this.generation === id;}
   private capture(constraints: MediaStreamConstraints) {return (this.options.getUserMedia || (c => navigator.mediaDevices.getUserMedia(c)))(constraints);}
+  private async limitVideoEncoding() {
+    const sender = this.videoSender;
+    if (!sender?.getParameters || !sender.setParameters) return;
+    try {
+      const parameters = sender.getParameters();
+      if (!parameters.encodings?.length) return;
+      // Limit the encoder, never the capture track shared with the local preview.
+      parameters.encodings = parameters.encodings.map(encoding => ({...encoding, maxFramerate: 10, maxBitrate: 800_000}));
+      await sender.setParameters(parameters);
+    } catch { /* Unsupported encoder hints must not prevent calling or lower local capture quality. */ }
+  }
   private send(event: Record<string, unknown>) {
     const channel = this.channels.find(c => c.label === "txt" && c.readyState === "open") || this.channels.find(c => c.readyState === "open");
     if (!channel) return false;
@@ -77,7 +91,7 @@ export class RealtimeVideoCall {
     this.update({...initialVideoCallState, phase: "preparing", notice: "正在连接摄像头和麦克风…"});
     this.timeout = setTimeout(() => {if (this.current(id)) this.fail("连接超时，请检查权限和网络后重试。");}, 45_000);
     try {
-      const stream = await this.capture({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}, video: {facingMode: {ideal: this.state.facing}, width: {ideal: 960}, height: {ideal: 540}, frameRate: {ideal: 10, max: 15}}});
+      const stream = await this.capture({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}, video: cameraConstraints(this.state.facing)});
       if (!this.current(id)) {stopStream(stream); return;}
       if (!stream.getAudioTracks().length || !stream.getVideoTracks().length) {stopStream(stream); throw new Error("missing-media");}
       stream.getTracks().forEach(track => {
@@ -117,6 +131,8 @@ export class RealtimeVideoCall {
       if (typeof result.sdp !== "string" || !result.session || typeof result.session !== "object") throw new Error("service");
       this.session = result.session;
       await peer.setRemoteDescription({type: "answer", sdp: result.sdp});
+      if (!this.current(id)) return;
+      await this.limitVideoEncoding();
       if (this.current(id)) this.configure();
     } catch (error) {
       if (!this.current(id)) return;
@@ -299,7 +315,7 @@ export class RealtimeVideoCall {
     try {
       await this.videoSender?.replaceTrack(null);
       if (!this.current(id)) return;
-      const stream = await this.capture({audio: false, video: {facingMode: {ideal: facing}, width: {ideal: 960}, height: {ideal: 540}, frameRate: {ideal: 10, max: 15}}});
+      const stream = await this.capture({audio: false, video: cameraConstraints(facing)});
       if (!this.current(id)) {stopStream(stream); return;}
       const video = stream.getVideoTracks()[0];
       // An audio track is never expected from this camera-only request.
@@ -307,6 +323,8 @@ export class RealtimeVideoCall {
       if (!video) {stopStream(stream); throw new Error("missing-camera");}
       this.video = video; this.tracks.add(video);
       video.addEventListener("ended", () => {if (this.current(id) && this.tracks.has(video)) this.fail("摄像头已断开，请重新拨打。");});
+      await this.limitVideoEncoding();
+      if (!this.current(id)) return;
       if (!this.videoWaitingForAudio) await this.videoSender?.replaceTrack(video);
       if (!this.current(id)) return;
       this.options.onPreview(stream); this.update({camera: true, facing, notice: "摄像头已开启，科小贝可以看见新画面了。"});

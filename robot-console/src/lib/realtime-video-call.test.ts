@@ -14,11 +14,11 @@ class Channel {
 }
 class Peer {
   connectionState = "new"; iceGatheringState = "complete"; localDescription = {sdp: "v=0"};
-  channel = new Channel(); senders: Array<{track: ReturnType<typeof track> | null; replaceTrack: ReturnType<typeof vi.fn>}> = [];
+  channel = new Channel(); senders: Array<{track: ReturnType<typeof track> | null; replaceTrack: ReturnType<typeof vi.fn>; getParameters: ReturnType<typeof vi.fn>; setParameters: ReturnType<typeof vi.fn>}> = [];
   onconnectionstatechange: (() => void) | null = null;
   ondatachannel: ((e: {channel: Channel}) => void) | null = null;
   ontrack: ((e: unknown) => void) | null = null;
-  addTrack(t: ReturnType<typeof track>) {const sender = {track: t, replaceTrack: vi.fn(async (next) => {sender.track = next;})}; this.senders.push(sender); return sender;}
+  addTrack(t: ReturnType<typeof track>) {const sender = {track: t, replaceTrack: vi.fn(async (next) => {sender.track = next;}), getParameters: vi.fn(() => ({encodings: [{active: true, rid: "main"}], transactionId: "existing"})), setParameters: vi.fn<(parameters: RTCRtpSendParameters) => Promise<void>>(async () => {})}; this.senders.push(sender); return sender;}
   getSenders() {return this.senders;}
   createDataChannel() {return this.channel;}
   createOffer = vi.fn(async () => ({type: "offer", sdp: "v=0"}));
@@ -28,7 +28,7 @@ class Peer {
 function setup(capture = stream()) {
   const peer = new Peer(), audio = {srcObject: null, muted: false, play: vi.fn(async () => {}), pause: vi.fn()};
   const states: VideoCallState[] = [], turns: Array<{role: string; text: string}> = [];
-  const getUserMedia = vi.fn(async () => capture as unknown as MediaStream);
+  const getUserMedia = vi.fn<NonNullable<ConstructorParameters<typeof RealtimeVideoCall>[0]["getUserMedia"]>>(async () => capture as unknown as MediaStream);
   const fetcher = vi.fn(async (url: string | URL | Request) => new Response(JSON.stringify(String(url).endsWith("session")
     ? {sdp: "v=0", session: {instructions: "科小贝"}} : {evidence: "资料", labLinks: []}), {headers: {"Content-Type": "application/json"}}));
   const call = new RealtimeVideoCall({audio: audio as unknown as HTMLAudioElement, onState: s => states.push({...s}), onPreview: vi.fn(), onTurn: t => turns.push(t),
@@ -37,6 +37,27 @@ function setup(capture = stream()) {
 }
 afterEach(() => {vi.useRealTimers(); vi.unstubAllGlobals();});
 describe("realtime video lifecycle", () => {
+  it("captures a smooth preview while limiting only the outgoing encoder", async () => {
+    const s = setup(); await s.call.start();
+    expect(s.getUserMedia).toHaveBeenCalledWith(expect.objectContaining({video: expect.objectContaining({frameRate: {ideal: 30, max: 30}})}));
+    expect(s.peer.senders[1].setParameters).toHaveBeenCalledWith(expect.objectContaining({transactionId: "existing", encodings: [{active: true, rid: "main", maxFramerate: 10, maxBitrate: 800000}]}));
+    s.call.stop();
+  });
+  it("keeps 30fps capture and encoder limits after changing cameras", async () => {
+    vi.useFakeTimers(); const s = setup(); await s.call.start();
+    s.peer.channel.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
+    s.getUserMedia.mockResolvedValueOnce(stream() as unknown as MediaStream);
+    await s.call.switchCamera();
+    expect(s.getUserMedia.mock.calls[1]?.[0]).toMatchObject({video: {frameRate: {ideal: 30, max: 30}}});
+    expect(s.peer.senders[1].setParameters).toHaveBeenCalledTimes(2); s.call.stop();
+  });
+  it("keeps calling when the browser rejects optional encoder limits", async () => {
+    const s = setup(); s.peer.setRemoteDescription.mockImplementationOnce(async () => {
+      s.peer.senders[1].setParameters.mockRejectedValue(new DOMException("Unsupported", "NotSupportedError"));
+    });
+    await s.call.start(); expect(s.states.at(-1)?.phase).toBe("connecting");
+    s.peer.channel.event({type: "session.updated"}); expect(s.states.at(-1)?.phase).toBe("listening"); s.call.stop();
+  });
   it("keeps the call and subtitles when a frame arrives before the next audio buffer", async () => {
     vi.useFakeTimers(); const s = setup(); await s.call.start(); const ch = s.peer.channel;
     ch.event({type: "session.updated"}); await vi.advanceTimersByTimeAsync(500);
