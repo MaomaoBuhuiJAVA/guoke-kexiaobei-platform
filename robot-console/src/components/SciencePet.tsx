@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Camera,
@@ -23,6 +24,7 @@ import {
   ThumbsUp,
   Trash2,
   Upload,
+  Video,
   Volume2,
   VolumeX,
   X,
@@ -63,6 +65,7 @@ import {
   type VoiceSession,
 } from "@/lib/voice-session";
 import Markdown from "react-markdown";
+const VideoCallPanel = dynamic(() => import("@/components/VideoCallPanel").then(module => module.VideoCallPanel), {ssr: false});
 import {
   useCallback,
   useEffect,
@@ -417,6 +420,7 @@ async function compressVisionImage(file: File): Promise<File> {
 
 export function SciencePet() {
   const [open, setOpen] = useState(false);
+  const [videoCallOpen, setVideoCallOpen] = useState(false);
   const [input, setInput] = useState("");
   const [composerMode, setComposerMode] = useState<ComposerMode>("text");
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -1621,6 +1625,7 @@ export function SciencePet() {
 
   function handleCloseChat() {
     stopAllVoice();
+    setVideoCallOpen(false);
     pendingLessonPlanRef.current = null;
     setMoreMenuOpen(false);
     setCreationDialog(null);
@@ -2333,8 +2338,17 @@ export function SciencePet() {
         .join(" ")}
       style={positionReady ? { right: position.right, bottom: position.bottom } : undefined}
     >
+      {videoCallOpen ? <VideoCallPanel
+        onClose={() => setVideoCallOpen(false)}
+        onTurn={turn => {const id = messageIdRef.current++; setMessages(current => [...current, {id, role: turn.role, text: turn.text}]);}}
+        onResources={labLinks => {
+          if (!labLinks.length) return;
+          const id = messageIdRef.current++;
+          setMessages(current => [...current, {id, role: "assistant", text: "找到这些园本资源，可以打开看看。", labLinks}]);
+        }}
+      /> : null}
       <AnimatePresence>
-        {open ? (
+        {open && !videoCallOpen ? (
           <motion.section
             className="pet-chat"
             aria-label="科小贝智能助手"
@@ -2362,6 +2376,15 @@ export function SciencePet() {
                     title="清空对话记录"
                   >
                     <Trash2 size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {stopAllVoice(); setVideoCallOpen(true);}}
+                    disabled={busy}
+                    aria-label="开启视频通话"
+                    title="开启视频通话"
+                  >
+                    <Video size={16} />
                   </button>
                   <button
                     type="button"
