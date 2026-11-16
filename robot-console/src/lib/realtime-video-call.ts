@@ -38,7 +38,7 @@ export class RealtimeVideoCall {
   private toolEpoch = 0;
   private tools = new Map<string, RealtimeEvent>();
   private handledTools = new Set<string>();
-  private fetchingTools = false;
+  private runningToolEpoch: number | null = null;
   private readonly fetcher: typeof fetch;
   constructor(private readonly options: Options) {this.fetcher = options.fetchImpl || fetch;}
 
@@ -185,8 +185,9 @@ export class RealtimeVideoCall {
     this.cancelCurrentResponse(true); this.update({phase: "listening", assistant: "", notice: "好，你说，我在听。"});
   }
   private async executeTools(id: number) {
-    if (this.fetchingTools) return;
-    this.fetchingTools = true; const epoch = this.toolEpoch;
+    const epoch = this.toolEpoch;
+    if (this.runningToolEpoch === epoch) return;
+    this.runningToolEpoch = epoch;
     const pending = [...this.tools.values()]; this.tools.clear();
     this.update({phase: "thinking", notice: "正在找园本资料…"});
     try {
@@ -209,7 +210,7 @@ export class RealtimeVideoCall {
         this.send({type: "conversation.item.create", item: {type: "function_call_output", call_id: tool.call_id, output: evidence}});
       }
       if (this.current(id) && epoch === this.toolEpoch) this.send({type: "response.create"});
-    } finally {this.fetchingTools = false;}
+    } finally {if (this.runningToolEpoch === epoch) this.runningToolEpoch = null;}
   }
   toggleMicrophone() {
     if (!this.active || !this.acknowledged) return;
@@ -227,11 +228,12 @@ export class RealtimeVideoCall {
     if (!this.active || !this.acknowledged || this.state.cameraBusy) return;
     if (this.video) {
       const id = this.generation;
+      this.update({cameraBusy: true});
       const old = this.video; this.tracks.delete(old); old.stop(); this.video = null;
       try {await this.videoSender?.replaceTrack(null);} catch {if (this.current(id)) this.fail("摄像头连接出现问题，请重新拨打。"); return;}
       if (!this.current(id)) return;
       this.options.onPreview(null);
-      this.update({camera: false, notice: "摄像头已关闭，可以继续语音聊天。"});
+      this.update({camera: false, cameraBusy: false, notice: "摄像头已关闭，可以继续语音聊天。"});
       this.send({type: "conversation.item.create", item: {type: "message", role: "user", content: [{type: "input_text", text: "我已关闭摄像头。之后不要把旧画面当作当前所见，直到重新开启。"}]}});
     } else await this.replaceCamera(this.state.facing);
   }

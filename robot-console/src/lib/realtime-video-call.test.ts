@@ -127,4 +127,30 @@ describe("realtime video lifecycle", () => {
     expect(s.states.at(-1)?.phase).toBe("ended");
     expect(s.states.at(-1)?.notice).toBe("通话已结束");
   });
+  it("runs a new tool request even while an interrupted request is pending", async () => {
+    const s = setup(); await s.call.start(); const ch = s.peer.channel;
+    ch.event({type: "session.updated"}); ch.event({type: "response.created", response: {id: "old-tool"}});
+    let resolveOld!: (r: Response) => void;
+    s.fetcher.mockImplementationOnce(() => new Promise(r => {resolveOld = r;}));
+    ch.event({type: "response.function_call_arguments.done", name: "search_science_resources", call_id: "old-call", arguments: '{"query":"风"}'});
+    ch.event({type: "response.done", response: {id: "old-tool"}});
+    ch.event({type: "input_audio_buffer.speech_started"});
+    ch.event({type: "response.created", response: {id: "new-tool"}});
+    ch.event({type: "response.function_call_arguments.done", name: "search_science_resources", call_id: "new-call", arguments: '{"query":"磁铁"}'});
+    ch.event({type: "response.done", response: {id: "new-tool"}});
+    await new Promise(r => setTimeout(r, 0));
+    resolveOld(new Response(JSON.stringify({evidence: "旧资料", labLinks: []})));
+    await new Promise(r => setTimeout(r, 0));
+    const outputs = ch.sent.filter(e => e.type === "conversation.item.create");
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0]).toMatchObject({item: {call_id: "new-call", output: "资料"}}); s.call.stop();
+  });
+  it("blocks camera reopening until the previous detach finishes", async () => {
+    const s = setup(); await s.call.start(); s.peer.channel.event({type: "session.updated"});
+    let resolve!: () => void;
+    s.peer.senders[1].replaceTrack.mockImplementationOnce(() => new Promise<void>(r => {resolve = r;}));
+    const off = s.call.toggleCamera(); await s.call.toggleCamera();
+    expect(s.getUserMedia).toHaveBeenCalledTimes(1);
+    resolve(); await off; expect(s.states.at(-1)?.camera).toBe(false); s.call.stop();
+  });
 });
