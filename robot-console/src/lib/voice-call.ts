@@ -4,7 +4,7 @@ export type VoiceReplyMode = "brief" | "content";
 export function requestsStoryContent(message: string) {
   const text = message.replace(/\s+/gu, "");
   return /故事/u.test(text) && !/资料库|资源库|园本|库里|库中|查找|检索|搜索|原文|视频|二维码|推荐|步骤|操作|教案|活动方案/u.test(text)
-    && !/^(?:请|帮我|给我|麻烦)*(?:找|查)/u.test(text);
+    && !(/找|查/u.test(text) && !/讲|听|写|编|创作|生成/u.test(text));
 }
 
 /** Content follow-ups inherit the latest user request, never an unrelated assistant example. */

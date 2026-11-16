@@ -30,7 +30,7 @@ describe("native teaching workflow",()=>{
     expect(sent.messages[0].content).toContain("500至800字");
   });
 
-  it.each(["帮我找一个科学故事", "推荐一个关于风的科学故事", "查一个科学故事"])("keeps real catalogue lookup for %s", async message => {
+  it.each(["帮我找一个科学故事", "推荐一个关于风的科学故事", "查一个科学故事", "请帮我给小班找一个科学故事", "给孩子找一个科学故事"])("keeps real catalogue lookup for %s", async message => {
     const result = await runTeachingWorkflow({message}, {catalog: []});
     expect(result.workflowState?.task).toBe("resources");
     expect(result.reply).toContain("暂未收录");
