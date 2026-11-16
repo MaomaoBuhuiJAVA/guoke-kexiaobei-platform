@@ -40,7 +40,7 @@ export class RealtimeVideoCall {
   private handledTools = new Set<string>();
   private runningToolEpoch: number | null = null;
   private readonly fetcher: typeof fetch;
-  constructor(private readonly options: Options) {this.fetcher = options.fetchImpl || fetch;}
+  constructor(private readonly options: Options) {this.fetcher = options.fetchImpl || globalThis.fetch.bind(globalThis);}
 
   private update(change: Partial<VideoCallState>) {this.state = {...this.state, ...change}; this.options.onState(this.state);}
   private current(id: number) {return this.active && this.generation === id;}

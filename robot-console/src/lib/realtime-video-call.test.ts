@@ -35,8 +35,22 @@ function setup(capture = stream()) {
     getUserMedia, createPeer: () => peer as unknown as RTCPeerConnection, fetchImpl: fetcher as typeof fetch});
   return {call, capture, peer, audio, states, turns, getUserMedia, fetcher};
 }
-afterEach(() => vi.useRealTimers());
+afterEach(() => {vi.useRealTimers(); vi.unstubAllGlobals();});
 describe("realtime video lifecycle", () => {
+  it("preserves the browser receiver when using native fetch", async () => {
+    const s = setup();
+    vi.stubGlobal("fetch", function(this: unknown) {
+      if (this !== globalThis) throw new TypeError("Illegal invocation");
+      return Promise.resolve(new Response(JSON.stringify({sdp: "v=0", session: {instructions: "科小贝"}})));
+    });
+    const states: VideoCallState[] = [];
+    const call = new RealtimeVideoCall({audio: s.audio as unknown as HTMLAudioElement, onState: state => states.push(state), onPreview: vi.fn(),
+      getUserMedia: s.getUserMedia, createPeer: () => s.peer as unknown as RTCPeerConnection});
+    await call.start();
+    expect(states.at(-1)?.phase).toBe("connecting");
+    expect(s.peer.setRemoteDescription).toHaveBeenCalledWith({type: "answer", sdp: "v=0"});
+    call.stop();
+  });
   it("releases permission results that arrive after hangup", async () => {
     const s = setup(); let resolve!: (s: MediaStream) => void;
     s.getUserMedia.mockImplementationOnce(() => new Promise(r => {resolve = r;}));
