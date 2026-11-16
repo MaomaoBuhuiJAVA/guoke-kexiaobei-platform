@@ -17,6 +17,7 @@ describe("voice call replies", () => {
 
   it("uses longer delivery for content requests and their follow-ups without lengthening a new factual question", () => {
     expect(voiceReplyMode("讲一个科学故事")).toBe("content");
+    expect(voiceReplyMode("火 焰 有关的 科 学 故 事")).toBe("content");
     expect(voiceReplyMode("推荐一首关于风的科学诗")).toBe("content");
     expect(voiceReplyMode("请朗读《风》")).toBe("content");
     const history = [{role: "user", content: "讲个故事"}, {role: "assistant", content: "纸船遇见了风。"}];

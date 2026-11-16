@@ -9,6 +9,7 @@ export function requestsStoryContent(message: string) {
 
 /** Content follow-ups inherit the latest user request, never an unrelated assistant example. */
 export function voiceReplyMode(message: string, history: Array<{role: string; content: string}> = []): VoiceReplyMode {
+  message = message.replace(/\s+/gu, "");
   const contentRequest = /故事|科学诗|诗歌|童谣|首诗|朗读|朗诵|背诵/u;
   const continuation = /再(?:讲|读|来|说|推荐)|继续(?:讲|读|说)?|长一点|详细一点|完整(?:一点|一些)|换(?:一|个|成)|短一点/u;
   if (contentRequest.test(message)) return "content";
@@ -16,8 +17,9 @@ export function voiceReplyMode(message: string, history: Array<{role: string; co
     for (let index = history.length - 1; index >= 0; index--) {
       const previous = history[index];
       if (previous.role !== "user") continue;
-      if (contentRequest.test(previous.content)) return "content";
-      if (!continuation.test(previous.content)) break;
+      const text = previous.content.replace(/\s+/gu, "");
+      if (contentRequest.test(text)) return "content";
+      if (!continuation.test(text)) break;
     }
   }
   return "brief";
