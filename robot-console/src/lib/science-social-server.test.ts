@@ -55,6 +55,13 @@ it("returns only the requested category ranked by real likes",async()=>{
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect(await response.json()).toMatchObject({items:[{id,title:"风",rank:1,stats:{likes:2,views:9}}]});
 });
+it("includes public author attribution for exactly the first ten ranked resources",async()=>{
+  vi.mocked(getScienceKnowledgeSummaries).mockResolvedValue(Array.from({length:12},(_,index)=>({id:`POEM-${index.toString(16).padStart(12,"0")}`,title:`诗${index}`,category:"科学诗",author:`教师${index}`})) as never);
+  vi.mocked(prisma.scienceResourceStats.findMany).mockResolvedValue([]);vi.mocked(prisma.scienceResourceLike.findMany).mockResolvedValue([]);
+  const data=await (await listScienceSocial(new Request("https://guokeey.cn/api/science-social?category="+encodeURIComponent("科学诗")))).json();
+  expect(data.items[0]).toMatchObject({author:"教师0"});expect(data.items[9]).toMatchObject({author:"教师9"});
+  expect(data.items[10]).not.toHaveProperty("author");
+});
 it("does not let another ordinary user delete someone else's comment",async()=>{
   vi.mocked(prisma.scienceResourceComment.findUnique).mockResolvedValue({itemId:id,authorId:"another"} as never);
   expect((await writeScienceSocial(request({commentId:"comment"}),id,"delete")).status).toBe(403);expect(prisma.$transaction).not.toHaveBeenCalled();

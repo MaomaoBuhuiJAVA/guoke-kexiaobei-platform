@@ -809,6 +809,10 @@ img {
   text-decoration: none;
 }
 
+.site-brand-actions{display:flex;align-items:center;gap:10px;min-width:0;flex:none}
+.site-resource-brand{display:flex;align-items:center;gap:8px;min-width:0;color:#173b42;text-decoration:none}.site-resource-brand>span:last-child{display:block;min-width:0}.site-resource-brand strong{display:block;font-size:14px;font-weight:700;line-height:1.5;white-space:nowrap}.site-resource-brand small{display:block;font-size:11px;line-height:1.5;color:#6c817c;white-space:nowrap}
+@media(max-width:720px){.site-brand-actions{gap:8px}.home-site-header>div{padding-inline:12px;gap:8px}.lab-site-header__inner{width:calc(100% - 24px);gap:8px}.home-site-header .site-brand-actions>a:first-child{gap:8px}.home-site-header .site-brand-actions>a:first-child>span{max-width:148px}}
+
 .lab-brand > span {
   display: grid;
   width: 40px;
@@ -5811,3 +5815,5 @@ img {
     margin-inline: 7px;
   }
 }
+
+@media(max-width:720px){.lab-site-header__inner{width:calc(100% - 24px);gap:8px}.site-brand-actions{gap:8px}}

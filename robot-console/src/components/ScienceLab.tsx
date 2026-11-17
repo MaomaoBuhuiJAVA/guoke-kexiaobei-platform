@@ -4,13 +4,12 @@ import Image from "next/image";
 import {canManageScience} from "@/lib/science-access";
 import {ExperimentSubmitDialog} from "./ExperimentSubmitDialog";
 import {ScienceSocialProvider,ResourceSocialBar,RecordScienceView,useScienceSocial} from "./ScienceSocial";
-import {ScienceRankingEntry} from "./ScienceRankingEntry";
+import {ResourceHeaderBrand} from "./ResourceHeaderBrand";
 import {sortSciencePopularity} from "@/lib/science-social";
 import Link from "next/link";
 import { uploadScienceMaterial } from "@/lib/science-upload-client";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  ArrowRight,
   BookOpen,
   CheckCircle2,
   CircleAlert,
@@ -29,7 +28,6 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { BrandLogo } from "@/components/BrandLogo";
 import { AccountMenu } from "@/components/AccountMenu";
 import type { SessionUser } from "@/lib/auth";
 import Markdown from "react-markdown";
@@ -432,14 +430,10 @@ function KnowledgeCard({
               </span>
             ))}
           </span>
-          <span className="knowledge-card__open">
-            查看资料
-            <ArrowRight size={15} />
-          </span>
         </span>
       </span>
     </button>
-    <ResourceSocialBar itemId={item.id} title={item.title}/>
+    <ResourceSocialBar itemId={item.id} title={item.title} compact/>
     </div>
   );
 }
@@ -1515,12 +1509,8 @@ function ScienceLabContent({
     <div className="lab-page">
       <header className="lab-site-header">
         <div className="lab-site-header__inner">
-          <Link className="lab-brand" href="/">
-            <BrandLogo size={42} />
-            <strong>科小贝资源库</strong>
-          </Link>
+          <ResourceHeaderBrand/>
           <GooeyNav items={labNavItems} activeKey="lab" />
-          <ScienceRankingEntry/>
           <AccountMenu initialUser={initialUser} />
         </div>
       </header>

@@ -1,5 +1,9 @@
 export type ScienceSocialStats={views:number;likes:number;comments:number;liked:boolean};
 export const EMPTY_SCIENCE_STATS:ScienceSocialStats={views:0,likes:0,comments:0,liked:false};
+/** Use only attribution already present in the public resource, never registered account data. */
+export function scienceRankingAuthor(item:{author?:string;excerpt?:string}){
+  return item.author?.trim()||item.excerpt?.match(/(?:实验大玩家|作者|提供者)[：:]\s*([\p{Script=Han}·]{2,12})(?=\s|[，。；;]|$)/u)?.[1]||"未署名";
+}
 /** Small local baseline, intentionally explicit; this is not a comprehensive moderation service. */
 const prohibited=[/傻[逼比屄]|煞笔|沙比|妈的|操你|草你|他妈|你妈死|狗日|狗杂种|贱人|去死|死全家|杀了你|弄死/u,/色情|裸聊|约炮|援交|性交易|黄色网站|成人视频|强奸|迷奸|嫖娼|卖淫/u,/代开发票|刷单返利|加微信|加微|加v[信x]?|博彩|赌博|买卖毒品/u,/(?:^|[^a-z])(?:sb|fuck|shit|bitch)(?:$|[^a-z])/iu];
 export function validateScienceComment(value:unknown):{ok:true;body:string}|{ok:false;error:string}{

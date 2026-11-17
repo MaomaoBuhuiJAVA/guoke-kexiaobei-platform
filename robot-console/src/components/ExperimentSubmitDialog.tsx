@@ -1,16 +1,21 @@
 "use client";
-import {useEffect,useRef,useState,type FormEvent} from "react";
+import {useEffect,useRef,useState,useSyncExternalStore,type FormEvent} from "react";
+import {createPortal} from "react-dom";
 import {LoaderCircle,Upload,X} from "lucide-react";
 import type {ExperimentInput} from "@/lib/science-experiment";
 import {EXPERIMENT_FIELDS} from "@/lib/experiment-fields";
 import {uploadScienceMaterial} from "@/lib/science-upload-client";
 import styles from "./ExperimentSubmit.module.css";
+const subscribe=()=>()=>{};
+const clientSnapshot=()=>true;
+const serverSnapshot=()=>false;
 
 export function ExperimentSubmitDialog({onClose,onSubmitted}:{onClose:()=>void;onSubmitted:(title:string)=>void}){
   const dialog=useRef<HTMLDialogElement>(null);
+  const mounted=useSyncExternalStore(subscribe,clientSnapshot,serverSnapshot);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[progress,setProgress]=useState<number|null>(null);
   const [images,setImages]=useState<Array<{file:File;caption:string}>>([]);
-  useEffect(()=>{dialog.current?.showModal();},[]);
+  useEffect(()=>{if(!mounted)return;dialog.current?.showModal();const previous=document.body.style.overflow;document.body.style.overflow="hidden";return()=>{document.body.style.overflow=previous;};},[mounted]);
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();if(busy)return;
     const form=new FormData(event.currentTarget);
@@ -31,7 +36,8 @@ export function ExperimentSubmitDialog({onClose,onSubmitted}:{onClose:()=>void;o
       onSubmitted(input.title);
     }catch(reason){setError(reason instanceof Error?reason.message:"提交失败，请重试");}finally{setBusy(false);}
   }
-  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="experiment-upload-title" onCancel={event=>{if(busy)event.preventDefault();else onClose();}}>
+  if(!mounted)return null;
+  return createPortal(<dialog ref={dialog} className={styles.dialog} aria-labelledby="experiment-upload-title" onCancel={event=>{if(busy)event.preventDefault();else onClose();}}>
     <header className={styles.header}><div><small>新增园本资料 · 科学实验</small><h2 id="experiment-upload-title">上传科学实验</h2></div><button type="button" aria-label="关闭实验上传" disabled={busy} onClick={onClose}><X size={22}/></button></header>
     <form onSubmit={submit}>
       <p className={styles.hint}>按实验卡片结构填写。提交后进入审核，教师或管理员审核通过后才会公开展示。</p>
@@ -56,5 +62,5 @@ export function ExperimentSubmitDialog({onClose,onSubmitted}:{onClose:()=>void;o
       {error&&<p role="alert" className={styles.error}>{error}</p>}
       <footer className={styles.footer}><button type="button" disabled={busy} onClick={onClose}>取消</button><button type="submit" disabled={busy} className={styles.primary}>{busy?<LoaderCircle size={16}/>:<Upload size={16}/>} {busy?progress===null?"提交中…":`上传中 ${progress}%`:"提交审核"}</button></footer>
     </form>
-  </dialog>;
+  </dialog>,document.body);
 }

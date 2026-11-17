@@ -15,12 +15,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { SciencePet } from "@/components/SciencePet";
-import { BrandLogo } from "@/components/BrandLogo";
 import { MobileAppNav, type MobileAppNavItem } from "@/components/MobileAppNav";
 import type { SiteData } from "@/lib/site-data";
 import type { SessionUser } from "@/lib/auth";
 import { AccountMenu } from "@/components/AccountMenu";
-import {ScienceRankingEntry} from "./ScienceRankingEntry";
+import {ResourceHeaderBrand} from "./ResourceHeaderBrand";
 
 type AgentHomeProps = {
   data: Pick<SiteData, "profile">;
@@ -60,7 +59,7 @@ const HOME_MOBILE_MODULE_FADE_DELAY_MS = 150;
 const HOME_MOBILE_MODULE_ROUTE_DELAY_MS = 380;
 const HOME_MOBILE_MODULE_LAYOUT_DURATION_S = 0.28;
 
-export function AgentHome({ data, initialUser }: AgentHomeProps) {
+export function AgentHome({ initialUser }: AgentHomeProps) {
   const router = useRouter();
   const mobileNavItems: MobileAppNavItem[] = initialUser
     ? [...homeCategoryItems, { key: "games", label: "科学乐园", href: "/games", icon: Gamepad2 }]
@@ -113,15 +112,7 @@ export function AgentHome({ data, initialUser }: AgentHomeProps) {
       <div className={`home-page min-h-screen bg-[#f7f7f2] text-[#173b42]${pendingCategory ? " home-page--navigating" : ""}${homeFade ? " home-page--fading" : ""}`}>
       <header className="home-site-header sticky top-0 z-30 border-b border-[#dce8e2]/90 bg-[#f7f7f2]/92 backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link className="flex min-w-0 items-center gap-3" href="/" aria-label={`${data.profile.shortName}科小贝资源库首页`}>
-            <BrandLogo size={44} />
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-bold text-[#173b42]">科小贝资源库</span>
-              <span className="block truncate text-xs text-[#6c817c]">幼儿科学教育助手</span>
-            </span>
-          </Link>
-
-          <ScienceRankingEntry/>
+          <ResourceHeaderBrand/>
           <nav className="flex items-center gap-2 text-sm font-medium">
             <AccountMenu initialUser={initialUser} />
             <Link className="hidden h-10 items-center rounded-[6px] border border-[#c8ddd5] px-3.5 text-[#176b5d] transition hover:bg-[#e6f2ec] sm:inline-flex" href="/works">

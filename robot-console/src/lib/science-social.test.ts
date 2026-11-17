@@ -1,5 +1,11 @@
 import {expect,it} from "vitest";
-import {validateScienceComment,sortSciencePopularity} from "./science-social";
+import {validateScienceComment,sortSciencePopularity,scienceRankingAuthor} from "./science-social";
+it("uses public resource authors or the published experiment attribution",()=>{
+  expect(scienceRankingAuthor({author:"张老师",excerpt:"实验大玩家：其他人"})).toBe("张老师");
+  expect(scienceRankingAuthor({author:"",excerpt:"实验大玩家：王小明 一、活动目标"})).toBe("王小明");
+  expect(scienceRankingAuthor({author:"小朋友"})).toBe("小朋友");
+  expect(scienceRankingAuthor({author:"",excerpt:"未提供人员信息"})).toBe("未署名");
+});
 it("accepts a useful scientific comment and normalizes spaces",()=>{
   expect(validateScienceComment('  这个实验很有趣，孩子发现了新现象。  ')).toEqual({ok:true,body:'这个实验很有趣，孩子发现了新现象。'});
 });

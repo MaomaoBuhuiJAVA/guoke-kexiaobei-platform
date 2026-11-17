@@ -4,7 +4,7 @@ import {getFreshSessionUser} from "./auth";
 import {checkAuthOrigin,readAuthJson} from "./auth-request";
 import {checkPublicRateLimit} from "./public-rate-limit";
 import {canReviewSubmissions} from "./review-access";
-import {validateScienceComment,sortSciencePopularity,type ScienceSocialStats} from "./science-social";
+import {validateScienceComment,sortSciencePopularity,scienceRankingAuthor,type ScienceSocialStats} from "./science-social";
 import {createHmac,randomUUID,timingSafeEqual} from "node:crypto";
 
 export const socialHeaders={"Cache-Control":"private, no-store"};
@@ -40,7 +40,7 @@ export async function listScienceSocial(request:Request){
     if(category!==null){
       if(!["科学诗","科学故事","科学实验"].includes(category))return socialReply({error:"请选择有效的排行榜分类"},400);
       const items=sortSciencePopularity(snapshot.items.filter(item=>item.category===category),snapshot.stats,"likes");
-      return socialReply({items:items.map((item,index)=>({id:item.id,title:item.title,ageLabel:item.ageLabel,category:item.category,topic:item.topic,rank:index+1,href:`/lab?item=${item.id}`,stats:snapshot.stats[item.id]}))});
+      return socialReply({items:items.map((item,index)=>({id:item.id,title:item.title,ageLabel:item.ageLabel,category:item.category,topic:item.topic,...(index<10?{author:scienceRankingAuthor(item)}:{}),rank:index+1,href:`/lab?item=${item.id}`,stats:snapshot.stats[item.id]}))});
     }
     return socialReply({stats:snapshot.stats,loggedIn:Boolean(actor)});
   }catch{return socialReply({error:"互动数据暂时无法加载，请稍后重试"},503);}
