@@ -5817,3 +5817,10 @@ img {
 }
 
 @media(max-width:720px){.lab-site-header__inner{width:calc(100% - 24px);gap:8px}.site-brand-actions{gap:8px}}
+
+/* Compact cards keep metrics inside the white area, below all introduction text. */
+@media (max-width: 720px) {
+  .knowledge-card-shell > .knowledge-card .knowledge-card__body {
+    padding-bottom: 52px;
+  }
+}
