@@ -454,6 +454,8 @@ function KnowledgeDetail({
   const userSubmittedLiterature =
     (display.category === "科学诗" || display.category === "科学故事") &&
     item?.allocationBasis === "用户提交";
+  const submittedPoem = display.category === "科学诗" && userSubmittedLiterature;
+  const detailBody = item?.body || display.excerpt;
   // Story covers are the first frame of the video. They belong on the
   // catalogue card and as the video's poster, so showing them again as a
   // gallery item creates a duplicate block in the detail dialog. User-
@@ -641,8 +643,8 @@ function KnowledgeDetail({
             </div>
           ) : (
             <>
-              <div className="markdown-content knowledge-detail__content">
-                <Markdown>{item?.body || display.excerpt}</Markdown>
+              <div className={`markdown-content knowledge-detail__content${submittedPoem ? " knowledge-detail__content--verse" : ""}`}>
+                {submittedPoem ? detailBody : <Markdown>{detailBody}</Markdown>}
               </div>
               {item&&<RecordScienceView itemId={item.id}/>}
               <ResourceSocialBar itemId={display.id} title={display.title} alwaysComments/>

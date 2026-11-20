@@ -4,13 +4,14 @@ afterEach(()=>vi.unstubAllEnvs());
 it("uses the same key as speech and the supplied image API without a separate image credential", async () => {
   vi.stubEnv("QWEN_TTS_API_KEY", "shared-speech-key");
   vi.stubEnv("AI_IMAGE_API_KEY", "obsolete-image-key");
+  vi.stubEnv("QWEN_IMAGE_MODEL", "");
   const provider = vi.fn<typeof fetch>(async () => Response.json({output: {choices: [{message: {content: [{image: "https://dashscope-result.oss-cn-beijing.aliyuncs.com/generated.png"}]}}]}}));
   const result = await generateTeachingImage({prompt: "uploaded poem about wind", ratio: "1:1", fetchImpl: provider});
-  expect(result.model).toBe("qwen-image");
+  expect(result.model).toBe("qwen-image-2.0-pro");
   expect(provider.mock.calls[0]?.[0]).toBe("https://maas.qianwenaiapi.com/api/v1/services/aigc/multimodal-generation/generation");
   const options = provider.mock.calls[0]?.[1] as RequestInit;
   expect(options.headers).toMatchObject({Authorization: "Bearer shared-speech-key"});
-  expect(JSON.parse(String(options.body))).toMatchObject({model: "qwen-image", parameters: {size: "1328*1328", n: 1, watermark: false, prompt_extend: true}});
+  expect(JSON.parse(String(options.body))).toMatchObject({model: "qwen-image-2.0-pro", parameters: {size: "1328*1328", n: 1, watermark: false, prompt_extend: true}});
 });
 it("uses exact aspect ratios and delivers one real provider image",async()=>{
   vi.stubEnv("QWEN_TTS_API_KEY", "test-key");

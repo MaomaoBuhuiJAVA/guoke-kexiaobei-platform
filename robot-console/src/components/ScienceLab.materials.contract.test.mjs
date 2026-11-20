@@ -98,6 +98,12 @@ test("uses generated literature covers as a full card image instead of a framed 
   assert.doesNotMatch(coverRule, /object-fit: contain/);
 });
 
+test("preserves line and stanza breaks in submitted poem text without changing other Markdown", () => {
+  assert.match(component, /const submittedPoem = display\.category === "科学诗" && userSubmittedLiterature/);
+  assert.match(component, /submittedPoem \? detailBody : <Markdown>\{detailBody\}<\/Markdown>/);
+  assert.match(styles, /\.knowledge-detail__content--verse\s*\{[^}]*white-space:\s*pre-wrap\s*;/);
+});
+
 test("does not repeat a user-submitted poem or story cover in its detail gallery", () => {
   assert.match(component, /const userSubmittedLiterature =/);
   assert.match(component, /display\.category === "科学诗" \|\| display\.category === "科学故事"/);

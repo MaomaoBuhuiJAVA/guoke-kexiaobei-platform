@@ -41,7 +41,7 @@ npm run start -- -p 3100 -H 127.0.0.1
 | `QWEN_API_BASE_URL` | 默认用户提供的 `https://maas.qianwenaiapi.com/api/v1`；文字/识图使用同一主机的 `/compatible-mode/v1/chat/completions` |
 | `QWEN_TEXT_MODEL / QWEN_VOICE_MODEL` | 普通问答默认 `qwen3.5-plus` 并启用思考模式；电话默认 `qwen-flash`、关闭思考以保持低延迟 |
 | `QWEN_VISION_MODEL` | 默认 `qwen3-vl-flash`；上传图片直接传给视觉 API，文档先提取实际正文 |
-| `QWEN_IMAGE_MODEL` | 默认示例支持的 `qwen-image`，通过 multimodal-generation API 返回真实图片，每次一张，关闭水印 |
+| `QWEN_IMAGE_MODEL` | 默认 `qwen-image-2.0-pro`，通过 multimodal-generation API 返回真实图片，每次一张，关闭水印 |
 | `QWEN_TTS_MODEL / QWEN_TTS_VOICE` | 默认 `qwen3-tts-flash`、`Mochi`，复用同一密钥合成首句及后续音频 |
 | `ALIBABA_CLOUD_ACCESS_KEY_ID / SECRET` | 复用现有 OSS 凭据；`ALIBABA_CLOUD_SECURITY_TOKEN` 仅在使用临时 STS 凭据时需要 |
 | `OSS_BUCKET / REGION` | 当前 `guokemeitiku`、`oss-cn-hangzhou`；私有对象通过本站 `/api/media/…` 按资料公开状态及作品权限交付 |

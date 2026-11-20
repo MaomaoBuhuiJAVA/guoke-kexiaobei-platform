@@ -1,5 +1,5 @@
 import { ModelUnavailableError } from "./model";
-import { qwenApiKey, qwenMultimodalEndpoint } from "@/lib/qwen-config";
+import { qwenApiKey, qwenImageModel, qwenMultimodalEndpoint } from "@/lib/qwen-config";
 import type { PoetryCoverAspectRatio } from "@/lib/agent-result";
 import { isGeneratedImageUrl } from "@/lib/generated-image-url";
 
@@ -10,7 +10,7 @@ export function imageSize(ratio:PoetryCoverAspectRatio) {
 export async function generateTeachingImage({prompt,ratio,signal,fetchImpl=fetch}:{prompt:string;ratio:PoetryCoverAspectRatio;signal?:AbortSignal;fetchImpl?:typeof fetch}) {
   const key=qwenApiKey();
   if(!key) throw new ModelUnavailableError("图片生成服务尚未配置，请补充通义图像 API 配置后重试。");
-  const model=process.env.QWEN_IMAGE_MODEL?.trim()||"qwen-image";
+  const model=qwenImageModel();
   const url=qwenMultimodalEndpoint();
   const response=await fetchImpl(url,{
     method:"POST",signal:AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(110_000)]),

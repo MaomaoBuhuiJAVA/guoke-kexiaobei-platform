@@ -2457,6 +2457,11 @@ img {
   padding-top: 10px;
 }
 
+.knowledge-detail__content--verse {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .science-pet {
   position: fixed;
   z-index: 80;

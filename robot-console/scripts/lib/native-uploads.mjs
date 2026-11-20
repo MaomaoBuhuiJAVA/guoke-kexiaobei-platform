@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import dotenv from "dotenv";
 import OSS from "ali-oss";
-import { qwenApiKey, qwenMultimodalEndpoint } from "../../src/lib/qwen-config-core.mjs";
+import { qwenApiKey, qwenImageModel, qwenMultimodalEndpoint } from "../../src/lib/qwen-config-core.mjs";
 import { isGeneratedImageUrl } from "../../src/lib/generated-image-url-core.mjs";
 
 export async function loadNativeUploadEnv(root = process.cwd()) {
@@ -33,7 +33,7 @@ export async function putPrivateMedia(pathname, source, {contentType, client} = 
 export async function generateQwenCover(prompt, {fetchImpl = fetch} = {}) {
   const key = qwenApiKey();
   if (!key) throw new Error("Qwen API credentials are not configured");
-  const response = await fetchImpl(qwenMultimodalEndpoint(), {method: "POST", redirect: "error", signal: AbortSignal.timeout(110_000), headers: {"Content-Type": "application/json", Authorization: `Bearer ${key}`}, body: JSON.stringify({model: process.env.QWEN_IMAGE_MODEL?.trim() || "qwen-image", input: {messages: [{role: "user", content: [{text: prompt}]}]}, parameters: {size: "1328*1328", n: 1, result_format: "message", prompt_extend: true, watermark: false, negative_prompt: "文字，汉字，字母，数字，水印，商标，真实儿童肖像"}})});
+  const response = await fetchImpl(qwenMultimodalEndpoint(), {method: "POST", redirect: "error", signal: AbortSignal.timeout(110_000), headers: {"Content-Type": "application/json", Authorization: `Bearer ${key}`}, body: JSON.stringify({model: qwenImageModel(), input: {messages: [{role: "user", content: [{text: prompt}]}]}, parameters: {size: "1328*1328", n: 1, result_format: "message", prompt_extend: true, watermark: false, negative_prompt: "文字，汉字，字母，数字，水印，商标，真实儿童肖像"}})});
   if (!response.ok) {await response.body?.cancel(); throw new Error(`Qwen image service returned ${response.status}`);}
   const payload = await response.json();
   const result = payload.output?.choices?.[0]?.message?.content?.find(value => typeof value.image === "string")?.image;

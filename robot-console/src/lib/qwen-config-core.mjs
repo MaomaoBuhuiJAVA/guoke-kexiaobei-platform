@@ -11,6 +11,10 @@ export function qwenApiKey() {
     || configuredQwenKey(process.env.QWEN_API_KEY);
 }
 
+export function qwenImageModel() {
+  return process.env.QWEN_IMAGE_MODEL?.trim() || "qwen-image-2.0-pro";
+}
+
 function apiBase() {
   try {
     const url = new URL(process.env.QWEN_API_BASE_URL?.trim() || "https://maas.qianwenaiapi.com/api/v1");
