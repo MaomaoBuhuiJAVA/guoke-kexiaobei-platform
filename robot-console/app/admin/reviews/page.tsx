@@ -16,7 +16,7 @@ export default async function ReviewPage() {
   }
   if (!user) redirect("/auth?next=/admin/reviews");
   if (!canReviewSubmissions(user)) {
-    return <main className="mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center gap-4 px-6 text-center"><h1 className="text-2xl font-bold">需要已核验教师或管理员账号</h1><p>请联系园方确认教师身份和审核权限。</p><Link className="text-[#176b5d] underline" href="/auth">前往账号中心</Link></main>;
+    return <main className="mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center gap-4 px-6 text-center"><h1 className="text-2xl font-bold">没有审核权限</h1><p>审核中心仅面向管理员和已验证手机号的指定教师。</p><Link className="text-[#176b5d] underline" href="/auth">前往账号中心</Link></main>;
   }
   return <ReviewCenter reviewerName={user.name} />;
 }

@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
   if (scope === "review") {
     if (!canReviewSubmissions(session)) {
-      return NextResponse.json({ error: "需要教师权限" }, { status: 403 });
+      return NextResponse.json({ error: "没有审核权限" }, { status: 403 });
     }
     where = status ? { status } : { status: "PENDING" };
     includePrivate = true;

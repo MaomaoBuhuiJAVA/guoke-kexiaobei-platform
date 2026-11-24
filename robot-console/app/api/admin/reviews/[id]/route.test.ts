@@ -14,7 +14,7 @@ const params = { params: Promise.resolve({ id: "work-1" }) };
 function request(body: unknown) { return new Request("http://localhost/api/admin/reviews/work-1", { method: "PATCH", body: JSON.stringify(body) }); }
 describe("review decisions", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.resetAllMocks();vi.stubEnv("REVIEW_TEACHER_PHONES","19900000001");
     vi.mocked(getFreshSessionUser).mockResolvedValue(admin);
     vi.mocked(prisma.$transaction).mockImplementation(async (callback: unknown) => (callback as (client: typeof tx) => Promise<unknown>)(tx) as never);
     tx.studentWork.findUnique.mockResolvedValue({ id: "work-1", title: "纸桥", description: "承重观察", mimeType: "image/png", mediaUrl: "/test.png", status: "PENDING", updatedAt: new Date(updatedAt), libraryDocumentId: null });
@@ -36,7 +36,7 @@ describe("review decisions", () => {
     expect(tx.knowledgeDocument.create).not.toHaveBeenCalled();
   });
   it("records a verified teacher's review without promoting them to admin",async()=>{
-    vi.mocked(getFreshSessionUser).mockResolvedValue({...admin,id:"teacher-1",role:"USER",accountType:"TEACHER",identityVerified:true});
+    vi.mocked(getFreshSessionUser).mockResolvedValue({...admin,id:"teacher-1",role:"USER",accountType:"TEACHER",identityVerified:true,phoneVerified:true,phone:"19900000001"});
     expect((await PATCH(request({action:"approve",expectedUpdatedAt:updatedAt}),params)).status).toBe(200);
     expect(tx.studentWork.updateMany).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reviewedBy:"teacher-1"})}));
   });

@@ -1,5 +1,5 @@
 /** Website upload keeps OSS credentials and private-object signing on the server. */
-export function uploadScienceMaterial(file: File, folder: "poems" | "stories" | "supporting" | "covers", onProgress: (percentage: number | null) => void): Promise<string> {
+export function uploadScienceMaterial(file: File, folder: "poems" | "stories" | "supporting" | "covers" | "videos", onProgress: (percentage: number | null) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/science-resources/upload");

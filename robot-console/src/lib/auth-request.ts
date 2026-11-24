@@ -18,13 +18,27 @@ export function checkAuthOrigin(request: Request) {
   if ((request.headers.get("origin") && request.headers.get("origin") !== origin) || request.headers.get("sec-fetch-site") === "cross-site")
     throw new AuthRequestError("请从本网站的账号页面操作。", 403);
 }
-export async function readAuthJson(request: Request) {
+export async function readAuthJson(request: Request, maxBytes = 4096) {
   checkAuthOrigin(request);
   if (request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") throw new AuthRequestError("请求格式无效。", 415);
-  const text = await request.text();
-  if (Buffer.byteLength(text, "utf8") > 4096) throw new AuthRequestError("提交内容过长。", 413);
+  if (Number(request.headers.get("content-length")) > maxBytes) throw new AuthRequestError("提交内容过长。", 413);
+  const reader = request.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (reader) try {
+    for (;;) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        throw new AuthRequestError("提交内容过长。", 413);
+      }
+      chunks.push(value);
+    }
+  } finally {reader.releaseLock();}
   let body: unknown;
-  try {body = JSON.parse(text);} catch {throw new AuthRequestError("请求格式无效。");}
+  try {body = JSON.parse(Buffer.concat(chunks).toString("utf8"));} catch {throw new AuthRequestError("请求格式无效。");}
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new AuthRequestError("请填写完整的账号信息。");
   return body as Record<string, unknown>;
 }

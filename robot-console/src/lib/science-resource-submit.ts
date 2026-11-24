@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { isStudentWorkObjectKey } from "./oss-media";
+import { SCIENCE_AGE_GROUPS, SCIENCE_LITERATURE_AGE_GROUPS } from "./science-types";
 
-export const SUBMIT_AGE_GROUPS = ["托班", "小班", "中班", "大班"] as const;
+export const SUBMIT_AGE_GROUPS = SCIENCE_AGE_GROUPS;
 export const SUBMIT_CATEGORIES = ["科学诗", "科学故事"] as const;
 
 export type ScienceSubmitCategory = (typeof SUBMIT_CATEGORIES)[number];
@@ -41,6 +42,7 @@ export function publicResourceUrl(value: unknown) {
   try {
     const relative = candidate.startsWith("/");
     const url = relative ? new URL(candidate, "https://catalog.invalid") : new URL(candidate);
+    if (relative && url.origin !== "https://catalog.invalid") return "";
     const pathname = decodeURIComponent(url.pathname);
     if (pathname.startsWith("/api/media/") && isStudentWorkObjectKey(pathname.slice("/api/media/".length))) return "";
     return url.protocol === "https:" && !url.username && !url.password ? (relative ? candidate : url.toString()) : "";
@@ -80,7 +82,7 @@ export function validateScienceResourceSubmit(
     return { ok: false, error: "只支持新增科学诗或科学故事" };
   }
   if (!title) return { ok: false, error: "请填写标题" };
-  if (!ageLabel || !SUBMIT_AGE_GROUPS.includes(ageLabel as (typeof SUBMIT_AGE_GROUPS)[number])) {
+  if (!SCIENCE_LITERATURE_AGE_GROUPS.some(group => group === ageLabel)) {
     return { ok: false, error: "请选择有效的年龄段" };
   }
   if (!topic) return { ok: false, error: "请填写主题" };

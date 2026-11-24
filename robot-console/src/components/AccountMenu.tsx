@@ -8,7 +8,6 @@ import {createPortal} from "react-dom";
 import {useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import {ChevronDown, ImagePlus, KeyRound, LoaderCircle, LogOut, Phone, ShieldCheck, UserRound, X} from "lucide-react";
 import type {SessionUser} from "@/lib/auth";
-import {canReviewSubmissions} from "@/lib/review-access";
 import {ACCOUNT_AVATARS, isPresetAvatar} from "@/lib/account-avatar";
 import {AccountSecurityForm, type AccountSecurityView} from "./AccountSecurityForm";
 import styles from "./AccountMenu.module.css";
@@ -185,7 +184,7 @@ export function AccountMenu({initialUser}: {initialUser?: SessionUser | null}) {
             <button type="button" disabled={busy} onClick={() => edit("password")}><KeyRound size={17} aria-hidden="true" />修改密码</button>
             <button type="button" disabled={busy} onClick={() => edit("phone")}><Phone size={17} aria-hidden="true" />{user.phone ? "修改绑定手机号" : "绑定手机号"}</button>
             <Link href="/works"><UserRound size={17} aria-hidden="true" />作品与成长档案</Link>
-            {canReviewSubmissions(user) && <Link href="/admin/reviews"><ShieldCheck size={17} aria-hidden="true" />审核中心</Link>}
+            {(user.role === "ADMIN" || user.canReview) && <Link href="/admin/reviews"><ShieldCheck size={17} aria-hidden="true" />审核中心</Link>}
             {user.role === "ADMIN" && <Link href="/admin/users"><UserRound size={17} aria-hidden="true" />注册账户管理</Link>}
             <button className={styles.logout} type="button" disabled={busy} onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />{busy ? "正在退出…" : "退出登录"}</button>
             {notice && !view && <p className={styles.error} role="alert">{notice}</p>}

@@ -61,8 +61,11 @@ async function accessFor(entry: Entry, requestUrl: string, requestedKey: string)
     if(entry.key.startsWith("uploads/science-resources/")){
       const user=await getSessionUser();
       if(!user)return null;
-      const submission=await prisma.scienceExperimentSubmission.findFirst({where:{mediaUrls:{hasSome:references},...(!canReviewSubmissions(user)?{ownerId:user.id}:{})},select:{id:true}});
-      if(submission)return "private";
+      const where = {mediaUrls: {hasSome: references}, ...(!canReviewSubmissions(user) ? {ownerId: user.id} : {})};
+      const experiment = await prisma.scienceExperimentSubmission.findFirst({where, select: {id: true}});
+      if (experiment) return "private";
+      const literature = await prisma.scienceLiteratureSubmission.findFirst({where, select: {id: true}});
+      if (literature) return "private";
     }
     return null;
   } catch { return null; }

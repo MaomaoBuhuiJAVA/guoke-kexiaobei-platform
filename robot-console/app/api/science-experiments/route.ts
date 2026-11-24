@@ -29,7 +29,7 @@ export async function GET(request:Request){
     if(!actor)return Response.json({error:"请先登录"},{status:401,headers});
     const params=new URL(request.url).searchParams;
     const review=params.get("review")==="1";
-    if(review&&!canReviewSubmissions(actor))return Response.json({error:"需要已核验教师或管理员审核权限"},{status:403,headers});
+    if(review&&!canReviewSubmissions(actor))return Response.json({error:"没有审核权限"},{status:403,headers});
     const status=params.get("status")||"PENDING",page=Number(params.get("page")||1);
     if(!["PENDING","APPROVED","REJECTED","ALL"].includes(status)||!Number.isSafeInteger(page)||page<1||page>100000)return Response.json({error:"筛选条件无效"},{status:400,headers});
     const where={...(!review?{ownerId:actor.id}:{}),...(status!=="ALL"?{status:status as "PENDING"|"APPROVED"|"REJECTED"}:{})};

@@ -35,11 +35,12 @@ test("offers an optional cover-image upload and includes it in the material subm
   assert.match(dialog, /category,\s*form,\s*coverFile,\s*poemFile,\s*videoFile,\s*supportingFile,/);
 });
 
-test("uploads files through the server-side OSS endpoint before saving catalogue metadata", () => {
+test("uploads files through the server-side OSS endpoint before submitting for review", () => {
   assert.match(component, /import \{ uploadScienceMaterial \} from "@\/lib\/science-upload-client"/);
   assert.match(uploadClient, /xhr\.open\("POST", "\/api\/science-resources\/upload"\)/);
   assert.match(uploadClient, /xhr\.timeout = 180_000/);
-  assert.match(component, /uploadMaterialFile\(videoFile, "stories", onUploadProgress\)/);
+  assert.match(component, /uploadMaterialFile\(videoFile, category === "科学故事" \? "stories" : "videos", onUploadProgress\)/);
+  assert.match(component, /科学诗视频（可选）/);
   assert.match(component, /requestBody\.set\("videoUrl", videoUrl\)/);
   assert.match(component, /requestBody\.set\("documentUrl", await uploadMaterialFile/);
 });
@@ -59,30 +60,27 @@ test("uses the first story-video frame as a WebP cover before submitting the sto
   assert.match(component, /document\.createElement\("video"\)/);
   assert.match(component, /canvas\.toBlob\([\s\S]*?"image\/webp"/);
   assert.match(component, /URL\.revokeObjectURL\(/);
-  assert.match(component, /"poems" \| "stories" \| "supporting" \| "covers"/);
+  assert.match(uploadClient, /"videos"/);
 
   const submitFlow = component.match(/const submitMaterial = useCallback\([\s\S]*?\n  \}, \[\]\);/)?.[0] ?? component;
-  assert.match(submitFlow, /category === "科学故事" && videoFile/);
+  assert.match(submitFlow, /if \(videoFile\)/);
   assert.match(submitFlow, /extractVideoFirstFrame\(videoFile\)/);
   assert.match(submitFlow, /uploadMaterialFile\(storyCover, "covers", onUploadProgress\)/);
   assert.match(submitFlow, /requestBody\.set\("coverUrl",/);
   assert.match(submitFlow, /requestBody\.set\("videoUrl", videoUrl\)/);
-  assert.match(submitFlow, /uploadedCoverReady \? Promise\.resolve\(null\) : extractVideoFirstFrame\(videoFile\)/);
-  assert.match(submitFlow, /if \(!uploadedCoverReady && storyCover\)/);
+  assert.match(submitFlow, /category === "科学故事" && !coverFile \? extractVideoFirstFrame\(videoFile\) : Promise\.resolve\(null\)/);
+  assert.match(submitFlow, /if \(storyCover\)/);
 });
 
-test("generates and persists a poem cover only when no user cover was uploaded", () => {
-  const poemFlow = component.match(/if \(category === "科学诗" && !uploadedCoverReady\) \{[\s\S]*?\n      \}/)?.[0] ?? "";
-  assert.match(poemFlow, /fetch\("\/api\/science-resources\/generate-cover"/);
-  assert.match(poemFlow, /method: "POST"/);
-  assert.match(poemFlow, /coverPayload, \["coverUrl"\]/);
-  assert.match(poemFlow, /coverPayload\.synced === true/);
-  assert.match(poemFlow, /卡通封面已自动生成/);
-  assert.doesNotMatch(poemFlow, /DIFY_API_KEY/);
+test("defers automatic poem cover generation until after review", () => {
+  const review = fs.readFileSync(path.resolve("app/api/science-literature/[id]/review/route.ts"), "utf8");
+  assert.doesNotMatch(component, /fetch\("\/api\/science-resources\/generate-cover"/);
+  assert.match(review, /category === "科学诗" && !validation\.value\.coverUrl/);
+  assert.match(review, /after\(async \(\) => \{\s*if \(await generatePublishedPoemCover/);
 });
 
 test("shows a dismissible success card after material creation", () => {
-  assert.match(component, /title: "添加成功"/);
+  assert.match(component, /title: "已提交审核"/);
   assert.match(component, /className="science-material-success-toast"/);
   assert.match(component, /<CheckCircle2 /);
   assert.match(component, /onClick=\{\(\) => setMaterialSuccessNotice\(null\)\}/);

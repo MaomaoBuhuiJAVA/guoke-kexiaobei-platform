@@ -5,10 +5,10 @@ vi.mock("@/lib/prisma",()=>({prisma:{studentWork:{findUnique:vi.fn()},$transacti
 import {getFreshSessionUser} from "@/lib/auth";
 import {prisma} from "@/lib/prisma";
 import {POST} from "./route";
-const reviewer={id:"teacher",name:"教师",role:"USER" as const,accountType:"TEACHER" as const,identityVerified:true};
+const reviewer={id:"teacher",name:"教师",role:"USER" as const,accountType:"TEACHER" as const,identityVerified:true,phoneVerified:true,phone:"19900000001"};
 const context={params:Promise.resolve({id:"work"})};
 const request=(body:unknown)=>new Request("http://localhost/api/student-works/work/review",{method:"POST",body:JSON.stringify(body)});
-beforeEach(()=>{vi.resetAllMocks();vi.mocked(getFreshSessionUser).mockResolvedValue(reviewer);vi.mocked(prisma.studentWork.findUnique).mockResolvedValue({updatedAt:new Date("2026-11-16T00:00:00Z")} as never);vi.mocked(prisma.$transaction).mockImplementation(async callback=>(callback as unknown as (client:typeof tx)=>Promise<unknown>)(tx) as never);tx.studentWork.findUnique.mockResolvedValue({id:"work",status:"PENDING",title:"纸桥",mediaUrl:"/file.png",mimeType:"image/png"});tx.studentWork.updateMany.mockResolvedValue({count:1});tx.knowledgeDocument.create.mockResolvedValue({id:"doc"});});
+beforeEach(()=>{vi.resetAllMocks();vi.stubEnv("REVIEW_TEACHER_PHONES","19900000001");vi.mocked(getFreshSessionUser).mockResolvedValue(reviewer);vi.mocked(prisma.studentWork.findUnique).mockResolvedValue({updatedAt:new Date("2026-11-16T00:00:00Z")} as never);vi.mocked(prisma.$transaction).mockImplementation(async callback=>(callback as unknown as (client:typeof tx)=>Promise<unknown>)(tx) as never);tx.studentWork.findUnique.mockResolvedValue({id:"work",status:"PENDING",title:"纸桥",mediaUrl:"/file.png",mimeType:"image/png"});tx.studentWork.updateMany.mockResolvedValue({count:1});tx.knowledgeDocument.create.mockResolvedValue({id:"doc"});});
 it("lets verified teachers use the legacy action through the protected review transaction",async()=>{
   expect((await POST(request({action:"approve",visibility:"public",addToLibrary:true}),context)).status).toBe(200);
   expect(tx.studentWork.updateMany).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reviewedBy:"teacher",status:"APPROVED"})}));

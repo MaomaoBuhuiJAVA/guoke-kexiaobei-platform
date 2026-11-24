@@ -6,11 +6,11 @@ vi.mock("next/cache",()=>({revalidateTag:vi.fn()}));
 import {prisma} from "@/lib/prisma";
 import {getFreshSessionUser} from "@/lib/auth";
 import {PATCH} from "./route";
-const teacher={id:"reviewer",name:"审核教师",role:"USER" as const,accountType:"TEACHER" as const,identityVerified:true};
+const teacher={id:"reviewer",name:"审核教师",role:"USER" as const,accountType:"TEACHER" as const,identityVerified:true,phoneVerified:true,phone:"19900000001"};
 const input={title:"纸桥",ageLabel:"中班",topic:"力",author:"科学组",objectives:"比较承重",materials:"纸、积木",steps:"折纸并观察",principle:"形状影响承重",safety:"成人陪伴",stepImages:[{url:"/images/step.png",caption:"折纸"}]};
 const params={params:Promise.resolve({id:"submission"})};
 const request=(action="approve",note="",version="2026-11-16T00:00:00.000Z")=>new Request("http://localhost/api/science-experiments/submission/review",{method:"PATCH",body:JSON.stringify({action,reviewNote:note,expectedUpdatedAt:version})});
-beforeEach(()=>{vi.resetAllMocks();vi.mocked(getFreshSessionUser).mockResolvedValue(teacher);vi.mocked(prisma.$transaction).mockImplementation(async callback=>(callback as unknown as (client:typeof tx)=>Promise<unknown>)(tx) as never);tx.scienceExperimentSubmission.findUnique.mockResolvedValue({id:"submission",status:"PENDING",payload:input});tx.scienceExperimentSubmission.updateMany.mockResolvedValue({count:1});});
+beforeEach(()=>{vi.resetAllMocks();vi.stubEnv("REVIEW_TEACHER_PHONES","19900000001");vi.mocked(getFreshSessionUser).mockResolvedValue(teacher);vi.mocked(prisma.$transaction).mockImplementation(async callback=>(callback as unknown as (client:typeof tx)=>Promise<unknown>)(tx) as never);tx.scienceExperimentSubmission.findUnique.mockResolvedValue({id:"submission",status:"PENDING",payload:input});tx.scienceExperimentSubmission.updateMany.mockResolvedValue({count:1});});
 it("publishes the complete experiment and ordered images only on approval",async()=>{
   const response=await PATCH(request(),params);expect(response.status).toBe(200);
   const data=await response.json();expect(data.publishedItemId).toMatch(/^EXP-[a-f0-9]{12}$/u);

@@ -17,10 +17,11 @@ describe("account avatar menu", () => {
     for (const mode of ["username", "password", "phone"]) expect(html).not.toContain(`href="/auth?mode=${mode}"`);
     expect(html).toContain("修改昵称");
   });
-  it("shows review to verified teachers and account management only to administrators", () => {
+  it("shows review only to authorized teachers and account management only to administrators", () => {
     expect(renderToStaticMarkup(<AccountMenu initialUser={user} />)).not.toContain("审核中心");
     expect(renderToStaticMarkup(<AccountMenu initialUser={{...user, role: "ADMIN"}} />)).toContain("审核中心");
-    const teacher=renderToStaticMarkup(<AccountMenu initialUser={{...user,accountType:"TEACHER",identityVerified:true}} />);
+    expect(renderToStaticMarkup(<AccountMenu initialUser={{...user,accountType:"TEACHER",identityVerified:true}} />)).not.toContain('href="/admin/reviews"');
+    const teacher=renderToStaticMarkup(<AccountMenu initialUser={{...user,accountType:"TEACHER",identityVerified:true,canReview:true}} />);
     expect(teacher).toContain('href="/admin/reviews"');
     expect(teacher).not.toContain('href="/admin/users"');
     expect(renderToStaticMarkup(<AccountMenu initialUser={{...user,accountType:"TEACHER",identityVerified:false}} />)).not.toContain("审核中心");

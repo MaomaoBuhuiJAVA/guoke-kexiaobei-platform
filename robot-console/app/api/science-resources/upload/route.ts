@@ -1,12 +1,12 @@
 import {authorizeScienceWrite} from "@/lib/science-write-access";
 import { NextResponse } from "next/server";
 import { checkPublicRateLimit } from "@/lib/public-rate-limit";
-import { persistOssUpload, readUploadForm, OssUploadValidationError } from "@/lib/oss-upload";
+import { persistOssUpload, readUploadForm, OssUploadValidationError, validateScienceVideo } from "@/lib/oss-upload";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
-const folders = new Set(["poems", "stories", "supporting", "covers"]);
+const folders = new Set(["poems", "stories", "supporting", "covers", "videos"]);
 
 export async function POST(request: Request) {
   const denied = await authorizeScienceWrite(request, "upload", 20);
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
   const file = form.get("file"), folder = form.get("folder");
   if (!(file instanceof File) || typeof folder !== "string" || !folders.has(folder)) return NextResponse.json({error: "请选择有效文件及资料类型"}, {status: 400});
   try {
+    if (folder === "videos") validateScienceVideo(file);
     const stored = await persistOssUpload(file, {folder: `science-resources/${folder}`, maxBytes: MAX_UPLOAD_BYTES});
     return NextResponse.json({url: stored.url}, {status: 201, headers: {"Cache-Control": "no-store"}});
   } catch (error) {

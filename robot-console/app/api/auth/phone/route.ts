@@ -4,6 +4,7 @@ import {authError, authPhone, authReply, readAuthJson, smsProof, AuthRequestErro
 import {createSession, getSessionUser} from "@/lib/auth";
 import {prisma} from "@/lib/prisma";
 import {verifySms} from "@/lib/sms";
+import {canReviewSubmissions} from "@/lib/review-access";
 export async function POST(request: Request) {
   try {
     const body = await readAuthJson(request); const session = await getSessionUser();
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
     const publicUser = {id: user.id, name: user.name, username: user.username, phone, role: user.role, accountType: user.accountType, identityVerified: user.identityVerified};
     try {await createSession({...publicUser, sessionVersion: user.sessionVersion + 1});}
     catch {return authReply({ok: true, requiresLogin: true});}
-    return authReply({ok: true, user: publicUser});
+    return authReply({ok: true, user: {...publicUser, canReview: canReviewSubmissions({...publicUser, phoneVerified: true})}});
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return authReply({error: "该手机号已绑定其他账号。"}, 409);
     return authError(error);

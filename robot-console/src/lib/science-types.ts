@@ -5,6 +5,7 @@ export const SCIENCE_CATEGORIES = [
 ] as const;
 
 export const SCIENCE_AGE_GROUPS = ["托班", "小班", "中班", "大班"] as const;
+export const SCIENCE_LITERATURE_AGE_GROUPS = [...SCIENCE_AGE_GROUPS, "教师"] as const;
 
 export const SCIENCE_RESOURCE_TYPES = [
   "图片资源",

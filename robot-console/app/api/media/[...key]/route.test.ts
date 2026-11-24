@@ -5,6 +5,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {
   scienceKnowledgeResource: { findFirst: vi.fn() },
   studentWork: { findFirst: vi.fn() },
   scienceExperimentSubmission: {findFirst:vi.fn()},
+  scienceLiteratureSubmission: {findFirst:vi.fn()},
 } }));
 const oss = vi.hoisted(() => ({ signatureUrl: vi.fn() }));
 vi.mock("@/lib/oss-media", async (original) => ({
@@ -26,16 +27,36 @@ import { GET } from "./route";
 describe("private OSS media access", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("REVIEW_TEACHER_PHONES", "19900000001");
     oss.signatureUrl.mockReturnValue("https://private-storage.example/signed-test");
     vi.mocked(getSessionUser).mockResolvedValue(null);
     vi.mocked(prisma.scienceKnowledgeResource.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.studentWork.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.scienceExperimentSubmission.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.scienceLiteratureSubmission.findFirst).mockResolvedValue(null);
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {vi.unstubAllGlobals(); vi.unstubAllEnvs();});
+
+  it("keeps a pending poem video private until the catalogue references it", async () => {
+    const path = "/api/media/uploads/science-resources/videos/poem.mp4";
+    const request = () => GET(new Request(`https://site.example${path}`), {params: Promise.resolve({key: ["uploads", "science-resources", "videos", "poem.mp4"]})});
+    const owner = {id: "author", name: "老师", role: "USER" as const, accountType: "TEACHER" as const, identityVerified: true, phoneVerified: true, phone: "19900000002"};
+    vi.mocked(prisma.scienceLiteratureSubmission.findFirst).mockImplementation((args) => Promise.resolve(!args?.where?.ownerId || args.where.ownerId === owner.id ? {id: "pending"} : null) as never);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("video", {headers: {"content-type": "video/mp4"}})));
+    expect((await request()).status).toBe(404);
+    vi.mocked(getSessionUser).mockResolvedValue({...owner, id: "other"});
+    expect((await request()).status).toBe(404);
+    vi.mocked(getSessionUser).mockResolvedValue(owner);
+    expect((await request()).headers.get("cache-control")).toBe("private, no-store");
+    vi.mocked(getSessionUser).mockResolvedValue({...owner, id: "reviewer", phone: "19900000001"});
+    expect((await request()).headers.get("cache-control")).toBe("private, no-store");
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+    vi.mocked(prisma.scienceKnowledgeResource.findFirst).mockResolvedValue({id: "published"} as never);
+    expect((await request()).status).toBe(200);
+  });
 
   it("serves pending experiment images privately to verified teacher reviewers only",async()=>{
-    vi.mocked(getSessionUser).mockResolvedValue({id:"reviewer",name:"教师",role:"USER",accountType:"TEACHER",identityVerified:true});
+    vi.mocked(getSessionUser).mockResolvedValue({id:"reviewer",name:"教师",role:"USER",accountType:"TEACHER",identityVerified:true,phoneVerified:true,phone:"19900000001"});
     vi.mocked(prisma.scienceExperimentSubmission.findFirst).mockResolvedValue({id:"pending"} as never);
     vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response("image",{headers:{"content-type":"image/png"}})));
     const context={params:Promise.resolve({key:["uploads","science-resources","supporting","step.png"]})};

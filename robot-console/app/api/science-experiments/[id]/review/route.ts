@@ -12,7 +12,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   try{
     const actor=await getFreshSessionUser();
     if(!actor)return Response.json({error:"请先登录"},{status:401,headers});
-    if(!canReviewSubmissions(actor))return Response.json({error:"需要已核验教师或管理员审核权限"},{status:403,headers});
+    if(!canReviewSubmissions(actor))return Response.json({error:"没有审核权限"},{status:403,headers});
     let body;try{body=await request.json();}catch{return Response.json({error:"审核请求格式无效"},{status:400,headers});}
     if(!body||!["approve","reject"].includes(body.action)||typeof body.expectedUpdatedAt!=="string"||!Number.isFinite(new Date(body.expectedUpdatedAt).getTime()))return Response.json({error:"请刷新投稿后重新审核"},{status:400,headers});
     if(body.reviewNote!==undefined&&typeof body.reviewNote!=="string")return Response.json({error:"审核意见格式无效"},{status:400,headers});

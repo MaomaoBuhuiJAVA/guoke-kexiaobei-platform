@@ -47,7 +47,7 @@ import { SciencePet } from "@/components/SciencePet";
 import type { AiChatCoverSync } from "@/lib/ai-chat-stream";
 import { isPlayableMediaUrl } from "@/lib/media-url";
 import {
-  SCIENCE_AGE_GROUPS,
+  SCIENCE_LITERATURE_AGE_GROUPS,
   type ScienceKnowledgeItem,
   type ScienceKnowledgeSummary,
 } from "@/lib/science-types";
@@ -739,43 +739,6 @@ function firstText(record: Record<string, unknown>, keys: string[]) {
   return "";
 }
 
-function summaryFromMaterialResponse(
-  payload: unknown,
-  category: MaterialCategory,
-  form: MaterialFormState,
-): ScienceKnowledgeSummary | null {
-  const root = isRecord(payload) ? payload : null;
-  if (!root) return null;
-  const candidate = [root.item, root.summary, root.resource].find(isRecord) ?? root;
-  const id = firstText(candidate, ["id", "baseId", "resourceId"]);
-  const title = firstText(candidate, ["title", "name"]) || form.title.trim();
-  if (!id || !title) return null;
-
-  const resources = Array.isArray(candidate.resources)
-    ? candidate.resources as ScienceKnowledgeSummary["resources"]
-    : [];
-  const resourceTypes = Array.isArray(candidate.resourceTypes)
-    ? candidate.resourceTypes.filter((value): value is ScienceKnowledgeSummary["resourceTypes"][number] => typeof value === "string")
-    : [];
-  const result: ScienceKnowledgeSummary = {
-    id,
-    baseId: firstText(candidate, ["baseId"]) || id,
-    semester: firstText(candidate, ["semester"]) || "2026",
-    category,
-    title,
-    ageLabel: firstText(candidate, ["ageLabel", "age", "ageGroup"]) || form.ageLabel,
-    topic: firstText(candidate, ["topic", "theme", "subject"]) || form.topic,
-    author: firstText(candidate, ["author", "provider", "creator"]) || form.author,
-    excerpt: firstText(candidate, ["excerpt", "description", "summary"]) || form.description || form.poemText.slice(0, 120),
-    tags: Array.isArray(candidate.tags) ? candidate.tags.filter((value): value is string => typeof value === "string") : [],
-    resourceTypes,
-    resources,
-  };
-  const coverUrl = firstText(candidate, ["coverUrl", "cover_url", "coverPath"]);
-  if (coverUrl) result.coverUrl = coverUrl;
-  return result;
-}
-
 /**
  * The story video is still local at this point, so its first decodable frame
  * can be safely rendered to a canvas and saved as the card cover.  A failed
@@ -886,7 +849,7 @@ async function extractVideoFirstFrame(file: File): Promise<File | null> {
 
 async function uploadMaterialFile(
   file: File,
-  folder: "poems" | "stories" | "supporting" | "covers",
+  folder: Parameters<typeof uploadScienceMaterial>[1],
   onProgress: (percentage: number | null) => void,
 ) {
   return uploadScienceMaterial(file, folder, onProgress);
@@ -1028,7 +991,7 @@ function ScienceMaterialDialog({
 
         <form className="science-material-dialog__form" onSubmit={handleSubmit}>
           <p className="science-material-dialog__hint">
-            带 <b>*</b> 的信息为必填项。提交后材料会进入资料列表，{isPoem ? "上传封面时优先使用；未上传时会自动生成卡通封面并替换默认封面。" : "上传封面时优先使用；未上传时视频首帧会自动作为卡片封面，视频也会作为资料详情中的可播放资源。"}
+            带 <b>*</b> 的信息为必填项。材料审核通过后公开。{isPoem ? "未上传封面时，审核通过后自动生成卡通封面。" : "未上传封面时，优先使用视频首帧。"}
           </p>
 
           <div className="science-material-dialog__fields">
@@ -1049,7 +1012,7 @@ function ScienceMaterialDialog({
                 onChange={(event) => updateField("ageLabel", event.target.value)}
               >
                 <option value="">请选择年龄段</option>
-                {SCIENCE_AGE_GROUPS.map((age) => <option key={age} value={age}>{age}</option>)}
+                {SCIENCE_LITERATURE_AGE_GROUPS.map((age) => <option key={age} value={age}>{age}</option>)}
               </select>
             </label>
             <label>
@@ -1116,21 +1079,21 @@ function ScienceMaterialDialog({
                   </small>
                 ) : null}
               </div>
-            ) : (
-              <div className="science-material-dialog__upload-field">
-                <span>故事视频 <b>*</b></span>
-                <label className="science-material-dialog__file-picker">
-                  <Upload size={17} />
-                  <span>{videoFile ? videoFile.name : "上传视频文件"}</span>
-                  <input
-                    required={!videoFile}
-                    type="file"
-                    accept="video/*,.mp4,.webm,.mov"
-                    onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)}
-                  />
-                </label>
-              </div>
-            )}
+            ) : null}
+            <div className="science-material-dialog__upload-field">
+              <span>{isPoem ? "科学诗视频（可选）" : <>故事视频 <b>*</b></>}</span>
+              <label className="science-material-dialog__file-picker">
+                <Upload size={17} />
+                <span>{videoFile ? videoFile.name : "上传视频文件"}</span>
+                <input
+                  aria-label={isPoem ? "上传科学诗视频（可选）" : "上传故事视频"}
+                  required={!isPoem && !videoFile}
+                  type="file"
+                  accept="video/*,.mp4,.webm,.mov"
+                  onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)}
+                />
+              </label>
+            </div>
             <div className="science-material-dialog__upload-field">
               <span>封面图片（可选）</span>
               <label className="science-material-dialog__file-picker">
@@ -1373,27 +1336,22 @@ function ScienceLabContent({
     requestBody.set("author", form.author.trim());
     requestBody.set("description", form.description.trim());
     requestBody.set("poemText", form.poemText.trim());
-    let storyCoverReady = false;
-    let uploadedCoverReady = false;
-
     try {
       if (coverFile) {
         const coverUrl = await uploadMaterialFile(coverFile, "covers", onUploadProgress);
         requestBody.set("coverUrl", coverUrl);
-        uploadedCoverReady = true;
       }
-      if (category === "科学故事" && videoFile) {
+      if (videoFile) {
         const [videoUrl, storyCover] = await Promise.all([
-          uploadMaterialFile(videoFile, "stories", onUploadProgress),
-          uploadedCoverReady ? Promise.resolve(null) : extractVideoFirstFrame(videoFile),
+          uploadMaterialFile(videoFile, category === "科学故事" ? "stories" : "videos", onUploadProgress),
+          category === "科学故事" && !coverFile ? extractVideoFirstFrame(videoFile) : Promise.resolve(null),
         ]);
         requestBody.set("videoUrl", videoUrl);
 
-        if (!uploadedCoverReady && storyCover) {
+        if (storyCover) {
           try {
             const coverUrl = await uploadMaterialFile(storyCover, "covers", onUploadProgress);
             requestBody.set("coverUrl", coverUrl);
-            storyCoverReady = true;
           } catch {
             // A video without a usable browser thumbnail can still be shared.
           }
@@ -1418,66 +1376,14 @@ function ScienceLabContent({
         throw new Error(message || "材料暂时无法保存，请稍后重试");
       }
 
-      const createdSummary = summaryFromMaterialResponse(payload, category, form);
-      if (!createdSummary) {
-        throw new Error("材料已提交，但服务器未返回资料摘要，请刷新后查看");
+      if (!isRecord(payload) || !isRecord(payload.submission) || payload.submission.status !== "PENDING") {
+        throw new Error("未能确认投稿状态，请稍后重试");
       }
-
-      setItems((current) => [createdSummary, ...current.filter((item) => item.id !== createdSummary.id)]);
-      setSelection((current) => ({ ...current, category, topic: "", ageLabel: "" }));
-      setVisibleCount(12);
       setMaterialCategory(null);
       setMaterialSuccessNotice({
-        title: "添加成功",
-        description: category === "科学诗"
-          ? uploadedCoverReady
-            ? `《${createdSummary.title}》已加入资源库，已使用上传封面`
-            : `《${createdSummary.title}》已加入资源库，正在生成卡通封面`
-          : uploadedCoverReady
-            ? `《${createdSummary.title}》已加入资源库，已使用上传封面`
-            : storyCoverReady
-            ? `《${createdSummary.title}》已加入资源库，已使用视频首帧作为封面`
-            : `《${createdSummary.title}》已加入资源库`,
+        title: "已提交审核",
+        description: `《${form.title.trim()}》审核通过后会在资源库公开。`,
       });
-
-      if (category === "科学诗" && !uploadedCoverReady) {
-        void (async () => {
-          try {
-            const coverResponse = await fetch("/api/science-resources/generate-cover", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                itemId: createdSummary.id,
-                title: createdSummary.title,
-                category,
-                topic: createdSummary.topic,
-                poem: form.poemText,
-                author: createdSummary.author,
-              }),
-            });
-            const coverPayload = (await coverResponse.json().catch(() => null)) as unknown;
-            const coverUrl = isRecord(coverPayload) ? firstText(coverPayload, ["coverUrl"]) : "";
-            const coverSynced = isRecord(coverPayload) && coverPayload.synced === true;
-            if (!coverResponse.ok || !coverUrl) throw new Error("cover generation failed");
-
-            setItems((current) => current.map((item) => (
-              item.id === createdSummary.id ? { ...item, coverUrl } : item
-            )));
-
-            if (!coverSynced) throw new Error("cover persistence failed");
-            const persistedCoverUrl = coverUrl;
-            const persisted = { ...createdSummary, coverUrl: persistedCoverUrl };
-
-            setItems((current) => current.map((item) => item.id === persisted.id ? persisted : item));
-            setMaterialSuccessNotice({
-              title: "封面已生成",
-              description: `《${persisted.title}》的卡通封面已自动生成`,
-            });
-          } catch {
-            setResourceNotice(`${category}《${createdSummary.title}》已添加，封面暂时未完成，请稍后重试。`);
-          }
-        })();
-      }
     } catch (error) {
       onUploadProgress(null);
       setResourceNotice(error instanceof Error ? error.message : "材料暂时无法保存，请稍后重试");
@@ -1700,7 +1606,7 @@ function ScienceLabContent({
               className="science-material-success-toast__close"
               onClick={() => setMaterialSuccessNotice(null)}
               title="关闭提示"
-              aria-label="关闭添加成功提示"
+              aria-label="关闭提示"
             >
               <X size={18} />
             </button>

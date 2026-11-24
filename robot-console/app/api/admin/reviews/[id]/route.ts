@@ -13,7 +13,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const user = await getFreshSessionUser();
     if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
-    if (!canReviewSubmissions(user)) return NextResponse.json({ error: "需要已核验教师或管理员审核权限" }, { status: 403 });
+    if (!canReviewSubmissions(user)) return NextResponse.json({ error: "没有审核权限" }, { status: 403 });
 
     let body: Record<string, unknown>;
     try {

@@ -1,5 +1,5 @@
 export const SCIENCE_TYPE_ORDER = ["科学诗", "科学故事", "科学实验"] as const;
-export const SCIENCE_AGE_ORDER = ["托班", "小班", "中班", "大班"] as const;
+export const SCIENCE_AGE_ORDER = ["托班", "小班", "中班", "大班", "教师"] as const;
 
 const SCIENCE_CATEGORY_SEARCH_ALIASES = [
   ["科学诗歌", "科学诗"],
@@ -71,7 +71,7 @@ function compactSearchTerms(
   if (!normalizedQuery) return [];
 
   const aliases = unique([
-    ...SCIENCE_AGE_ORDER,
+    ...SCIENCE_AGE_ORDER.filter(age => age !== "教师"),
     ...SCIENCE_CATEGORY_SEARCH_ALIASES.map(([label]) => label),
     ...items.map((item) => item.topic),
   ])
@@ -146,7 +146,8 @@ export function availableAges(
         (item) =>
           matchesSelection(item.category, category) && matchesSelection(item.topic, topic),
       )
-      .map((item) => item.ageLabel),
+      .map((item) => item.ageLabel)
+      .concat(category === "科学诗" || category === "科学故事" ? ["教师"] : []),
     SCIENCE_AGE_ORDER,
   );
 }

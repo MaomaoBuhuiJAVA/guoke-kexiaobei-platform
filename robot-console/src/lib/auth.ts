@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
+import { canReviewSubmissions } from "./review-access";
 
 export type SessionUser = {
   id: string;
@@ -10,6 +11,8 @@ export type SessionUser = {
   username?: string | null;
   accountType?: "PARENT" | "TEACHER" | null;
   identityVerified?: boolean;
+  phoneVerified?: boolean;
+  canReview?: boolean;
   sessionVersion?: number;
   name: string;
   avatarKey?: string | null;
@@ -130,9 +133,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       return null;
     }
 
-    const current = await prisma.user.findUnique({where: {id: payload.id}, select: {id: true, username: true, phone: true, accountType: true, identityVerified: true, name: true, avatarKey: true, role: true, sessionVersion: true}});
+    const current = await prisma.user.findUnique({where: {id: payload.id}, select: {id: true, username: true, phone: true, accountType: true, identityVerified: true, phoneVerified: true, name: true, avatarKey: true, role: true, sessionVersion: true}});
     if (!current || current.sessionVersion !== (payload.sessionVersion ?? 0)) return null;
-    return current;
+    return { ...current, canReview: canReviewSubmissions(current) };
   } catch {
     return null;
   }

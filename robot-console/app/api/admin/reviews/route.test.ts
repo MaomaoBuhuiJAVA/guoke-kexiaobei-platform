@@ -8,7 +8,7 @@ const admin = { id: "admin", name: "审核员", email: "admin@example.test", rol
 function request(query = "") { return new Request("http://localhost/api/admin/reviews" + query); }
 describe("review queue access and listing", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.resetAllMocks();vi.stubEnv("REVIEW_TEACHER_PHONES","19900000001");
     vi.mocked(getFreshSessionUser).mockResolvedValue(admin);
     vi.mocked(prisma.studentWork.findMany).mockResolvedValue([]);
     vi.mocked(prisma.studentWork.count).mockResolvedValue(0);
@@ -25,7 +25,7 @@ describe("review queue access and listing", () => {
     expect(prisma.studentWork.findMany).not.toHaveBeenCalled();
   });
   it("lets a verified teacher load the same review queue",async()=>{
-    vi.mocked(getFreshSessionUser).mockResolvedValue({...admin,role:"USER",accountType:"TEACHER",identityVerified:true});
+    vi.mocked(getFreshSessionUser).mockResolvedValue({...admin,role:"USER",accountType:"TEACHER",identityVerified:true,phoneVerified:true,phone:"19900000001"});
     expect((await GET(request())).status).toBe(200);
   });
   it("filters status, searches and paginates without exposing account credentials", async () => {

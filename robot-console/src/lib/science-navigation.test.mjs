@@ -32,13 +32,21 @@ const items = [
 
 test("derives topics and ages from the selected type and topic", () => {
   assert.deepEqual(availableTopics(items, "科学诗"), ["风", "光影"]);
-  assert.deepEqual(availableAges(items, "科学诗", "风"), ["小班"]);
+  assert.deepEqual(availableAges(items, "科学诗", "风"), ["小班", "教师"]);
 });
 
 test("treats empty dependent selections as all values", () => {
   assert.deepEqual(availableTopics(items, ""), ["风", "光学现象", "光影", "水与液体"]);
   assert.deepEqual(availableAges(items, "", ""), ["小班", "中班"]);
-  assert.deepEqual(availableAges(items, "科学诗", ""), ["小班", "中班"]);
+  assert.deepEqual(availableAges(items, "科学诗", ""), ["小班", "中班", "教师"]);
+});
+
+test("offers the teacher group for poetry and stories but not experiments", () => {
+  assert.deepEqual(availableAges(items, "科学故事", "光学现象"), ["小班", "教师"]);
+  assert.deepEqual(availableAges(items, "科学实验", "水与液体"), ["小班"]);
+  const teacherPoem = {id: "teacher-poem", category: "科学诗", topic: "风", ageLabel: "教师", title: "风的观察"};
+  const results = filterScienceItems([...items, teacherPoem], {category: "科学诗", topic: "风", ageLabel: "教师"});
+  assert.deepEqual(results.map(item => item.id), [teacherPoem.id]);
 });
 
 test("preserves empty selections while still resetting invalid non-empty dependencies", () => {

@@ -102,6 +102,8 @@ model User {
   reviewedStudentWorks StudentWork[]         @relation("StudentWorkReviewer")
   experimentSubmissions ScienceExperimentSubmission[] @relation("ExperimentOwner")
   reviewedExperiments ScienceExperimentSubmission[] @relation("ExperimentReviewer")
+  literatureSubmissions ScienceLiteratureSubmission[] @relation("LiteratureOwner")
+  reviewedLiterature ScienceLiteratureSubmission[] @relation("LiteratureReviewer")
   scienceResourceLikes ScienceResourceLike[]
   scienceResourceComments ScienceResourceComment[]
   studentWorkComments  StudentWorkComment[]
@@ -454,6 +456,28 @@ model ScienceExperimentSubmission {
 
   @@index([status, createdAt])
   @@index([ownerId, createdAt])
+}
+
+model ScienceLiteratureSubmission {
+  id              String            @id @default(cuid())
+  title           String
+  category        String
+  ownerId         String
+  payload         Json
+  mediaUrls       String[]          @default([])
+  status          StudentWorkStatus @default(PENDING)
+  reviewNote      String?           @db.Text
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  publishedItemId String?           @unique
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  owner           User              @relation("LiteratureOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  reviewer        User?             @relation("LiteratureReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+
+  @@index([category, status, createdAt])
+  @@index([ownerId, createdAt])
+  @@index([mediaUrls], type: Gin)
 }
 
 model ScienceKnowledgeItem {

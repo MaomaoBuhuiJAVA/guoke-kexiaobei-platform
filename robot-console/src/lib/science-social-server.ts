@@ -3,7 +3,7 @@ import {getScienceKnowledgeSummaries} from "./science-data";
 import {getFreshSessionUser} from "./auth";
 import {checkAuthOrigin,readAuthJson} from "./auth-request";
 import {checkPublicRateLimit} from "./public-rate-limit";
-import {canReviewSubmissions} from "./review-access";
+import {canManageScience} from "./science-access";
 import {validateScienceComment,sortSciencePopularity,scienceRankingAuthor,type ScienceSocialStats} from "./science-social";
 import {createHmac,randomUUID,timingSafeEqual} from "node:crypto";
 
@@ -55,7 +55,7 @@ export async function getScienceComments(request:Request,id:string){
       prisma.scienceResourceComment.findMany({where:{itemId:id},orderBy:[{createdAt:"desc"},{id:"desc"}],take:20,skip:(page-1)*20,select:{id:true,body:true,createdAt:true,authorId:true,author:{select:{role:true,accountType:true}}}}),
       prisma.scienceResourceComment.count({where:{itemId:id}}),
     ]);
-    return socialReply({comments:comments.map(comment=>({id:comment.id,body:comment.body,createdAt:comment.createdAt,authorName:comment.author.role==="ADMIN"?"管理员":comment.author.accountType==="TEACHER"?"教师":"参与者",canDelete:Boolean(actor&&(actor.id===comment.authorId||canReviewSubmissions(actor)))})),total,page,pageSize:20});
+    return socialReply({comments:comments.map(comment=>({id:comment.id,body:comment.body,createdAt:comment.createdAt,authorName:comment.author.role==="ADMIN"?"管理员":comment.author.accountType==="TEACHER"?"教师":"参与者",canDelete:Boolean(actor&&(actor.id===comment.authorId||canManageScience(actor)))})),total,page,pageSize:20});
   }catch{return socialReply({error:"评论暂时无法加载，请稍后重试"},503);}
 }
 export async function writeScienceSocial(request:Request,id:string,operation:"post"|"like"|"delete"){
@@ -89,7 +89,7 @@ export async function writeScienceSocial(request:Request,id:string,operation:"po
       if(typeof body.commentId!=="string"||body.commentId.length>100)return socialReply({error:"评论信息无效"},400);
       const comment=await prisma.scienceResourceComment.findUnique({where:{id:body.commentId},select:{authorId:true,itemId:true}});
       if(!comment||comment.itemId!==id)return socialReply({error:"评论不存在"},404);
-      if(actor.id!==comment.authorId&&!canReviewSubmissions(actor))return socialReply({error:"没有删除权限"},403);
+      if(actor.id!==comment.authorId&&!canManageScience(actor))return socialReply({error:"没有删除权限"},403);
       await prisma.$transaction(async tx=>{const removed=await tx.scienceResourceComment.deleteMany({where:{id:body.commentId as string,itemId:id}});if(removed.count)await tx.scienceResourceStats.update({where:{itemId:id},data:{comments:{decrement:1}}});});
       return socialReply({ok:true});
     }

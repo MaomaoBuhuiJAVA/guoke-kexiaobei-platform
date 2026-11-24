@@ -6,9 +6,9 @@ import {getFreshSessionUser} from "@/lib/auth";
 import {authorizeScienceWrite} from "@/lib/science-write-access";
 import {prisma} from "@/lib/prisma";
 import {GET,POST} from "./route";
-const teacher={id:"teacher",name:"教师",role:"USER" as const,accountType:"TEACHER" as const,identityVerified:true};
+const teacher={id:"teacher",name:"教师",role:"USER" as const,accountType:"TEACHER" as const,identityVerified:true,phoneVerified:true,phone:"19900000001"};
 const input={title:"纸桥",ageLabel:"中班",topic:"力",author:"科学组",objectives:"比较承重",materials:"纸、积木",steps:"折纸并观察",principle:"形状影响承重",safety:"成人陪伴"};
-beforeEach(()=>{vi.resetAllMocks();vi.mocked(getFreshSessionUser).mockResolvedValue(teacher);vi.mocked(authorizeScienceWrite).mockResolvedValue(null);vi.mocked(prisma.scienceExperimentSubmission.create).mockResolvedValue({id:"submission",status:"PENDING"} as never);vi.mocked(prisma.scienceExperimentSubmission.findMany).mockResolvedValue([]);vi.mocked(prisma.scienceExperimentSubmission.count).mockResolvedValue(0);});
+beforeEach(()=>{vi.resetAllMocks();vi.stubEnv("REVIEW_TEACHER_PHONES","19900000001");vi.mocked(getFreshSessionUser).mockResolvedValue(teacher);vi.mocked(authorizeScienceWrite).mockResolvedValue(null);vi.mocked(prisma.scienceExperimentSubmission.create).mockResolvedValue({id:"submission",status:"PENDING"} as never);vi.mocked(prisma.scienceExperimentSubmission.findMany).mockResolvedValue([]);vi.mocked(prisma.scienceExperimentSubmission.count).mockResolvedValue(0);});
 const request=(body:unknown)=>new Request("http://localhost/api/science-experiments",{method:"POST",body:JSON.stringify(body)});
 it("creates only a pending submission belonging to the session teacher",async()=>{
   const response=await POST(request({...input,ownerId:"forged",status:"APPROVED"}));

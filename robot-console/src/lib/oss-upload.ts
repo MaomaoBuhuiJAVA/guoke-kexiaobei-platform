@@ -47,6 +47,10 @@ export function validateOssUpload(file: File, maxBytes: number): void {
   uploadMime(file);
 }
 
+export function validateScienceVideo(file: File): void {
+  if (!uploadMime(file).startsWith("video/")) throw new OssUploadValidationError("请选择视频文件");
+}
+
 /** Only newly created keys returned by this request may be rolled back. */
 export async function discardScienceUpload(key: string): Promise<void> {
   if (!/^uploads\/science-resources\/(poems|stories|supporting|covers|videos)\/[a-f0-9-]{36}-[^/]+$/u.test(key)) throw new Error("Invalid upload rollback key");
