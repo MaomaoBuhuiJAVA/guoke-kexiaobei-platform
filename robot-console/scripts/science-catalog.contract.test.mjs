@@ -9,6 +9,10 @@ const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
 const sourceRoot = path.resolve("E:\\国科二幼\\科学诗、科学故事、科学教案、科学实验");
 const experimentPlanRoot = path.join(sourceRoot, "科学教案纯文本", "科学实验教案");
 const experimentImageRoot = path.join(sourceRoot, "科学实验图片");
+const experiments = catalog.filter((item) => item.category === "科学实验");
+const originalExperiments = experiments.filter((item) => item.sourceFile.startsWith("科学教案纯文本/科学实验教案/"));
+const incomingExperimentPrefix = "微信新增科学实验/8.22新增科学实验/";
+const incomingExperiments = experiments.filter((item) => item.sourceFile.startsWith(incomingExperimentPrefix));
 
 const unsupportedExternalVideoTitles = new Set([
   "神奇的毛细现象",
@@ -205,22 +209,18 @@ test("science experiments bind explicitly to the supplied E: source layout", () 
   assert.ok(fs.existsSync(experimentImageRoot), `missing experiment-image root: ${experimentImageRoot}`);
 });
 
-test("science experiment catalog contains the 24 source plans and no old experiment paths", () => {
-  const experiments = catalog.filter((item) => item.category === "科学实验");
+test("science experiment catalog retains each original source plan and excludes unknown source trees", () => {
   const sourceDocuments = walkFiles(experimentPlanRoot, (filePath) => filePath.toLowerCase().endsWith(".docx"));
   const sourceDocumentPaths = sourceDocuments.map(sourcePath).sort(compareNaturalPaths);
-  const catalogDocumentPaths = Array.from(new Set(experiments.map((item) => item.sourceFile))).sort(compareNaturalPaths);
+  const catalogDocumentPaths = Array.from(new Set(originalExperiments.map((item) => item.sourceFile))).sort(compareNaturalPaths);
 
   assert.equal(sourceDocuments.length, 20);
-  assert.equal(experiments.length, 24);
-  assert.ok(
-    experiments.every((item) => item.sourceFile.startsWith("科学教案纯文本/科学实验教案/")),
-    "all experiment text must come from the reorganized teaching-plan tree",
-  );
+  assert.equal(originalExperiments.length, 24);
+  assert.equal(experiments.length, originalExperiments.length + incomingExperiments.length);
   assert.deepEqual(catalogDocumentPaths, sourceDocumentPaths);
 
   assert.deepEqual(
-    experiments.map((item) => item.title).sort(compareNaturalPaths),
+    originalExperiments.map((item) => item.title).sort(compareNaturalPaths),
     [
       "会变魔术的温度计",
       "会游的纸鱼",
@@ -257,7 +257,7 @@ test("the five bubble-liquid activities split one source document without losing
   }
 });
 
-test("all accepted source images keep source order, source paths, and role-aware labels", () => {
+test("original experiment images keep source order, source paths, and role-aware labels", () => {
   const expectedByTitle = new Map();
   const entries = experimentImageEntries();
   const rejectedMismatches = entries.filter(
@@ -283,8 +283,7 @@ test("all accepted source images keep source order, source paths, and role-aware
   assert.equal(expectedByTitle.size, 23);
   assert.equal(expectedImageCount, 131);
 
-  const experiments = catalog.filter((item) => item.category === "科学实验");
-  const catalogImages = experiments.flatMap((item) =>
+  const catalogImages = originalExperiments.flatMap((item) =>
     item.resources.filter((resource) => resource.type === "图片资源"),
   );
   assert.equal(catalogImages.length, expectedImageCount);
@@ -340,7 +339,7 @@ test("the four decorative bubble-liquid frames are omitted and the remaining ste
   }
 });
 
-test("every experiment keeps its source QR image and only known videos expose an external link", () => {
+test("original experiments retain their source QR images and verified video links", () => {
   const entries = experimentImageEntries().filter((entry) => entry.role === "video" && imageMatchesPackage(entry));
   const expectedByTitle = new Map();
 
@@ -354,8 +353,7 @@ test("every experiment keeps its source QR image and only known videos expose an
   assert.equal(entries.length, 24);
   assert.equal(expectedByTitle.size, 24);
 
-  const experiments = catalog.filter((item) => item.category === "科学实验");
-  const catalogVideos = experiments.flatMap((item) =>
+  const catalogVideos = originalExperiments.flatMap((item) =>
     item.resources.filter((resource) => resource.type === "视频资源"),
   );
   assert.equal(catalogVideos.length, 24);
@@ -389,11 +387,58 @@ test("every experiment keeps its source QR image and only known videos expose an
     }
   }
 
-  const noExternalLinkTitles = experiments
+  const noExternalLinkTitles = originalExperiments
     .filter((item) => item.resources.some((resource) => resource.type === "视频资源" && resource.externalUrl === ""))
     .map((item) => item.title)
     .sort(compareNaturalPaths);
   assert.deepEqual(noExternalLinkTitles, Array.from(unsupportedExternalVideoTitles).sort(compareNaturalPaths));
+});
+
+test("the August import retains its plans, images, QR codes, and playable video", () => {
+  const expectedImageCounts = {
+    会跳舞的蛇: 0,
+    空气动力喷泉: 12,
+    会爬升的水: 5,
+    吸管抽水机: 4,
+    会漂浮的鸡蛋: 5,
+    会跳高的乒乓球: 3,
+    水中烟花: 0,
+    悬浮鸡蛋: 7,
+    悬浮的鸡蛋: 5,
+  };
+  assert.deepEqual(
+    incomingExperiments.map((item) => item.title).sort(compareNaturalPaths),
+    Object.keys(expectedImageCounts).sort(compareNaturalPaths),
+  );
+
+  for (const item of incomingExperiments) {
+    const packageDirectory = item.sourceFile.slice(0, item.sourceFile.lastIndexOf("/") + 1);
+    const images = item.resources.filter((resource) => resource.type === "图片资源");
+    const videos = item.resources.filter((resource) => resource.type === "视频资源");
+    assert.equal(images.length, expectedImageCounts[item.title], item.title);
+    assert.equal(item.imageCount, images.length, item.title);
+    assert.equal(videos.length, item.title === "会跳舞的蛇" ? 0 : 1, item.title);
+
+    for (const resource of [...images, ...videos]) {
+      const prefix = resource.type === "图片资源" ? "/science-assets/experiments/" : "/science-assets/video-qr/";
+      assert.ok(resource.isPublic && resource.filePath.startsWith(packageDirectory), resource.title);
+      assert.ok(resource.publicPath.startsWith(prefix), resource.title);
+      const localPath = path.resolve("public", resource.publicPath.slice(1));
+      assert.ok(fs.statSync(localPath).size > 0, `empty asset: ${resource.publicPath}`);
+    }
+
+    if (item.title === "水中烟花") {
+      const videoPath = "/science-assets/videos/incoming-water-fireworks-720p.mp4";
+      assert.equal(videos[0].filePath, item.sourceFile);
+      assert.equal(videos[0].externalUrl, `https://guokeey.cn${videoPath}`);
+      assert.equal(item.videoUrl, videos[0].externalUrl);
+      assert.ok(fs.statSync(path.resolve("public", videoPath.slice(1))).size > 0);
+    } else {
+      assert.match(item.sourceFile, /\.docx$/iu);
+      assert.ok(item.resources.some((resource) => resource.type === "教案资源" && resource.filePath === item.sourceFile));
+      assert.ok(videos.every((resource) => resource.externalUrl === ""));
+    }
+  }
 });
 
 test("catalog IDs are unique and every item has a source path", () => {

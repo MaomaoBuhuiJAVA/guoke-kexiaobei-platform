@@ -64,8 +64,8 @@ test("keeps age choices broad after removing the topic control", () => {
 test("renders ordered experiment images after the experiment instructions", () => {
   const component = fs.readFileSync(componentPath, "utf8");
 
-  assert.match(component, /className="markdown-content knowledge-detail__content"[\s\S]*className="knowledge-detail__steps"/);
-  assert.match(component, /className="knowledge-detail__steps"[\s\S]*images\.map/);
+  assert.match(component, /<div className=\{`markdown-content knowledge-detail__content[^`]*`\}>[\s\S]*?<Markdown>\{detailBody\}<\/Markdown>[\s\S]*?className="knowledge-detail__steps"/);
+  assert.match(component, /className="knowledge-detail__steps"[\s\S]*?imageGroups\.map[\s\S]*?group\.images\.map/);
 });
 
 test("groups source experiment images by their role with meaningful captions", () => {
