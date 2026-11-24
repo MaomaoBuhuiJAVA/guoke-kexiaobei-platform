@@ -190,12 +190,14 @@ export async function GET(request: Request) {
   const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 30) : 10;
 
   const summaries = await getScienceKnowledgeSummaries();
-  const searchQuery = [query, category, topic, age, resourceType].filter(Boolean).join(" ");
-  const matchedSummaries = hasSearch
-    ? searchScienceSummaries(summaries, searchQuery, limit).filter(
+  const teacherGroup = age === "教师";
+  const scopedSummaries = teacherGroup ? summaries.filter(item => item.ageLabel === age && (item.category === "科学诗" || item.category === "科学故事")) : summaries;
+  const searchQuery = [query, category, topic, teacherGroup ? "" : age, resourceType].filter(Boolean).join(" ");
+  const matchedSummaries = searchQuery
+    ? searchScienceSummaries(scopedSummaries, searchQuery, limit).filter(
         (item) => !topic || item.topic === topic,
       )
-    : summaries;
+    : scopedSummaries;
   const selectedSummaries = hasSearch ? matchedSummaries.slice(0, limit) : matchedSummaries;
   const items = hasSearch
     ? await Promise.all(

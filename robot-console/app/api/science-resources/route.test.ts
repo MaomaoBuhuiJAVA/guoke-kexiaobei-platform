@@ -21,7 +21,8 @@ import {getFreshSessionUser} from "@/lib/auth";
 import {authorizeScienceWrite} from "@/lib/science-write-access";
 import {createOssClient} from "@/lib/oss-media";
 vi.mock("@/lib/oss-media", async importOriginal => ({...await importOriginal<object>(), createOssClient: vi.fn()}));
-import { PATCH, POST } from "./route";
+import {getScienceKnowledgeItem, getScienceKnowledgeSummaries} from "@/lib/science-data";
+import { GET, PATCH, POST } from "./route";
 
 function jsonRequest(body: Record<string, unknown>) {
   return new Request("http://localhost/api/science-resources", {
@@ -139,4 +140,15 @@ describe("science resource creation", () => {
     await expect(response.json()).resolves.toEqual({ error: "封面同步接口不对外开放" });
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+});
+
+it("filters an explicit teacher group exactly without treating teacher in a title as an age group", async () => {
+  const poem = {id: "teacher-poem", category: "科学诗", ageLabel: "教师"};
+  const normal = {id: "normal", category: "科学故事", ageLabel: "小班", title: "教师讲故事"};
+  const experiment = {id: "experiment", category: "科学实验", ageLabel: "教师"};
+  vi.mocked(getScienceKnowledgeSummaries).mockResolvedValue([poem, normal, experiment] as never);
+  vi.mocked(getScienceKnowledgeItem).mockResolvedValue(null);
+  const response = await GET(new Request(`http://localhost/api/science-resources?age=${encodeURIComponent("教师")}`));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({items: [poem], count: 1});
 });
