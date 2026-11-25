@@ -96,15 +96,20 @@
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
   function resize() {
-    w = arena.clientWidth; h = arena.clientHeight;
-    if (!w || !h) return;
-    dpr = Math.min(devicePixelRatio || 1, 2.5);
-    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    const width = arena.clientWidth, height = arena.clientHeight;
+    const pixelRatio = Math.min(devicePixelRatio || 1, 2.5);
+    if (!width || !height || document.hidden || (width === w && height === h && pixelRatio === dpr && homes.length)) return;
+    w = width; h = height; dpr = pixelRatio;
+    const pixelWidth = Math.round(w * dpr), pixelHeight = Math.round(h * dpr);
+    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
     size = { w: clamp(w * .176, 53, 111), h: clamp(w * .231, 76, 132) };
     const spread = Math.min(w * .231, 166), compact = w < 540;
     homes = state.cups.map((_, i) => bounds(w / 2 + (i < 4 ? i - 1.5 : i - 5) * spread, h * (i < 4 ? (compact ? .44 : .47) : .78)));
     if (open !== null) positionPicker();
-    schedule();
+    // Changing the canvas dimensions clears it. Paint before the browser can present the empty buffer.
+    if (raf) cancelAnimationFrame(raf);
+    render(performance.now());
   }
   function positionPicker() {
     const p = position(open);
@@ -347,7 +352,9 @@
     checkpoint(); restore(newState(), '七只杯子已清空。');
   });
   new ResizeObserver(resize).observe(arena);
-  document.addEventListener('visibilitychange', schedule);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { resize(); schedule(); }
+  });
   motion.addEventListener('change', schedule);
   syncLabels(); syncRecords(); resize();
 })();
