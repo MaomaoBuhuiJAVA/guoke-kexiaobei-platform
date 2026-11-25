@@ -19,8 +19,18 @@ export function GamesHome() {
       <div>
         <h1 id="games-heading">今天，玩点科学<span>。</span></h1>
       </div>
-      <p className={styles.introNote}>磁力、沉浮，还有光和影。<br />选一个实验，直接动手玩。</p>
+      <p className={styles.introNote}>这里有磁力、沉浮、光影和颜色。<br />选一个实验，直接动手玩。</p>
     </section>
+
+    <article className={styles.colorCard}>
+      <div className={styles.colorCopy}>
+        <h2>七杯混色实验室</h2>
+        <p>给空杯选一种颜色，拖动水杯倒一倒，看看会调出什么颜色。</p>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- The standalone HTML needs a document navigation. */}
+        <a href="/games/play/color-lab" className={styles.colorButton}>开始混色<ArrowRight size={19} /></a>
+      </div>
+      <div className={styles.colorArt} aria-hidden="true"><span /><span /><span /></div>
+    </article>
 
     <section className={styles.playCollection} aria-label="可以动手玩的小游戏">
       <article className={styles.magnetCard}>

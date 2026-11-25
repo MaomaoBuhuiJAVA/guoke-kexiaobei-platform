@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f6f7f2">
+  <title>七杯混色实验室 · 科小贝科学乐园</title>
+  <link rel="stylesheet" href="/assets/science-games/color-lab/lab.css">
+  <script src="/assets/science-games/color-lab/model.js" defer></script>
+  <script src="/assets/science-games/color-lab/paint.js" defer></script>
+  <script src="/assets/science-games/color-lab/lab.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/games"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M13 6h6m-5 0v8L8 23a2 2 0 0 0 1.7 3h12.6a2 2 0 0 0 1.7-3l-6-9V6M11 19h10"/><path d="M23 9h5m-2.5-2.5v5"/></svg><span>科小贝<small>科学乐园</small></span></a>
+    <span class="header-label">动手实验<span></span>颜色与材料</span>
+    <a class="back" href="/games"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7M5 12h14"/></svg>游戏总览</a>
+  </header>
+  <main class="shell">
+    <div class="heading">
+      <div><p class="eyebrow"><span></span> 科学实验室 <span class="divider"></span> 01</p><h1>七杯混色实验室</h1></div>
+      <div class="toolbar" aria-label="实验工具">
+        <button id="undo" class="tool" type="button" title="撤销上一步" aria-label="撤销上一步" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a5 5 0 0 1 0 10h-2"/></svg><span>撤销</span></button>
+        <button id="reset" class="tool" type="button" title="重置实验" aria-label="重置实验" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 1 2.6 6.4M3 12V5m0 7h7"/></svg><span>重置</span></button>
+      </div>
+    </div>
+    <div class="layout">
+      <section class="workbench" aria-label="混色实验台">
+        <div class="bench-head"><span><i></i> 混色实验台</span><span class="count"><b id="used">0</b> / 7 杯有色水</span></div>
+        <div class="arena" id="arena">
+          <canvas id="scene" aria-hidden="true"></canvas>
+          <div class="cup-layer" id="cups" role="group" aria-label="七只实验杯"></div>
+          <div class="toast" id="toast" hidden></div>
+          <div class="picker" id="picker" role="dialog" aria-label="选择颜料" hidden>
+            <div class="picker-head"><strong id="pickerTitle">选择颜料</strong><button type="button" id="closePicker" aria-label="关闭颜料选择" title="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+            <div class="swatches" id="swatches"></div>
+          </div>
+        </div>
+        <div class="bench-foot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.7c2.8 4.6 6 7.6 6 11.5a6 6 0 1 1-12 0c0-3.9 3.2-6.9 6-11.5Z"/><path d="M9 14a3 3 0 0 0 3 3"/></svg><span id="status" role="status" aria-live="polite">点一个空杯，选一种颜色。</span></div>
+      </section>
+      <aside class="notebook" aria-label="配色笔记">
+        <div class="notebook-head"><div class="book-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2ZM8 7h8m-8 4h5"/></svg></div><div><p>实验记录</p><h2>配色笔记</h2></div><span id="logCount">00</span></div>
+        <div id="records" class="records"></div>
+        <div class="notebook-foot"><span></span> 水彩混色模拟 <span></span></div>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

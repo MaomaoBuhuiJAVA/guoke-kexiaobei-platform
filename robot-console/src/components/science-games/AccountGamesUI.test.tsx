@@ -21,7 +21,8 @@ describe("account-based game pages", () => {
     const $ = load(renderToStaticMarkup(<GamesHome />));
     expect($("section[aria-label='我的游戏记录']").length).toBe(0);
     expect($("footer").length).toBe(0);
-    expect($("h2").map((_, element) => $(element).text()).get()).toEqual(["磁力打捞", "沉浮实验室", "影子工坊"]);
+    expect($("h2").map((_, element) => $(element).text()).get()).toEqual(["七杯混色实验室", "磁力打捞", "沉浮实验室", "影子工坊"]);
+    expect($('a[href="/games/play/color-lab"]').text()).toBe("开始混色");
   });
   it("shows one online leaderboard without local scope tabs or personal summary", () => {
     const $ = load(renderToStaticMarkup(<ExplorationBoard />));
